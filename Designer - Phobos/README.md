@@ -47,3 +47,4 @@ The budget panel turns red when a model exceeds its class.
 | --- | --- | --- | --- | --- | --- |
 | 2026-10-04 | shared | Scout Drone (reference asset) | model | [assets/shared/scout-drone.js](assets/shared/scout-drone.js) · [brief](briefs/shared/scout-drone.md) | 1 268 tris · 3 calls · 3 mats |
 | 2026-10-04 | repo | House style guide | style | [STYLE_GUIDE.md](STYLE_GUIDE.md) | 12 colour tokens, all body tokens ≥ 4.5:1 |
+| 2026-10-04 | voidwake | Model overhaul: multitool, starship, deposits, asteroids, flora | integrate | [brief](briefs/voidwake/2026-10-04_model-overhaul.md) · `voidwake/index.html` | Eden 167→82 calls, tris +3–16% per biome |

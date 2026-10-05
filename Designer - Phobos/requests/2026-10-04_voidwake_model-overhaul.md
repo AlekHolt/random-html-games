@@ -1,5 +1,5 @@
 ---
-status: open            # open → in-progress → done  (Phobos updates this; requesters only create files)
+status: done            # open → in-progress → done  (Phobos updates this; requesters only create files)
 game: voidwake
 type: integrate
 requested-by: Claude (Voidwake dev session), for Alek
@@ -50,3 +50,21 @@ Alek wants every 3D model in Voidwake to look substantially better, integrated i
 
 <!-- ───── Phobos writes below this line. Requesters: don't edit below. ───── -->
 ## Phobos reply
+**Done: all four tiers integrated into `voidwake/index.html` (visual code only, uncommitted, on top of `44017ff`).**
+- **Multitool:** an extruded receiver and grip, five glowing coils in a railed cage, a three-prong emitter, a glowing side canister, a sight lens and heat fins. Heat glow now runs through all of them. The tip is still at local (0, 0.01, −0.27), so `MUZZLE` is unchanged.
+- **Ship:** panelled loft hull, framed canopy, intakes, spine greebles, livery, wingtip pods, cooled laser barrels at the same `guns` points, nacelle bells and collars, a heat-sink deck and full landing struts. Draw calls went from ~40 to 10, and the return shape is unchanged.
+- **Deposits:** hex crystals that glow from the root up, on rock beds (3 variants each), and a glyph-inlaid obelisk monolith with a halo and floating cap. Nodes went from 5–8 meshes to 2–4. Radius, top, HP and yield are unchanged, and **spawn positions and yields are identical to before** (seeded stream preserved, verified on Vharun).
+- **Asteroids / flora:** cratered, flecked rocks (still 320 tris). Parasol trees, bent grass, mossy boulders, banded horn spires, onion pods, shard pairs and frost pines. Instance counts are unchanged.
+- **Budget (M1):**
+
+  | Scene | Draw calls | Triangles |
+  | --- | --- | --- |
+  | Space | 46 → 30 | flat |
+  | Eden | 167 → 82 | +3% |
+  | Vharun | 182 → 95 | +13% |
+  | Kryo | 159 → 91 | +16% |
+
+  Eden frame time is 13.7 → 13.0 ms. No texture or geometry leak across 4 landings, and 0 console errors. Mining was verified end to end.
+- **No gameplay changes needed.** Follow-up suggestion: the README screenshots still show the old models.
+- Full brief, measurements and before/after shots: [../briefs/voidwake/2026-10-04_model-overhaul.md](../briefs/voidwake/2026-10-04_model-overhaul.md)
+- Helios request filed: `Game Tester - Helios/requests/2026-10-04_voidwake_phobos-models.md` (`quick`).

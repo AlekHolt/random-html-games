@@ -1573,64 +1573,218 @@ const World = {
 };
 
 /* =====================================================================
-   STARSHIP MODEL — built from primitives, forward = -Z
+   MODEL KIT: small helpers for the procedural hard-surface models below (Phobos).
+   Every model merges its parts per material, so each one costs only a few draw calls.
+   ===================================================================== */
+const KIT_O = new THREE.Object3D(), KIT_A = new THREE.Vector3(), KIT_B = new THREE.Vector3(), KIT_C = new THREE.Vector3();
+/* transform a geometry in place (position, Euler rotation, scale) and return it */
+function xf(g, x, y, z, rx, ry, rz, sx, sy, sz) {
+  const s = sx === undefined ? 1 : sx;
+  KIT_O.position.set(x || 0, y || 0, z || 0); KIT_O.rotation.set(rx || 0, ry || 0, rz || 0);
+  KIT_O.scale.set(s, sy === undefined ? s : sy, sz === undefined ? s : sz); KIT_O.updateMatrix();
+  return g.applyMatrix4(KIT_O.matrix);
+}
+/* merge [geometry, colour] pairs into one non-indexed geometry with position, normal and vertex colour.
+   colour: hex or THREE.Color for the whole part, or null to keep the part's own colour attribute */
+function mergeTinted(list) {
+  const parts = list.map(([g, c]) => [g.index ? g.toNonIndexed() : g, c == null ? null : (c.isColor ? c : lin(c)), g]);
+  let n = 0; parts.forEach(([g]) => { n += g.attributes.position.count; });
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3).fill(1);
+  let o = 0;
+  parts.forEach(([g, c]) => {
+    const cnt = g.attributes.position.count;
+    if (!g.attributes.normal) g.computeVertexNormals();
+    pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3);
+    if (c) for (let i = o * 3; i < (o + cnt) * 3; i += 3) { col[i] = c.r; col[i + 1] = c.g; col[i + 2] = c.b; }
+    else if (g.attributes.color) col.set(g.attributes.color.array, o * 3);
+    o += cnt;
+  });
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  parts.forEach(([g, , src]) => { g.dispose(); src.dispose(); });
+  return out;
+}
+/* per-face colour by facing: up-facing faces get `top`, down-facing `bottom`, the rest `side` (returns non-indexed) */
+function tintByNormal(g, top, side, bottom) {
+  if (g.index) { const ng = g.toNonIndexed(); g.dispose(); g = ng; }
+  const P = g.attributes.position.array, col = new Float32Array(P.length);
+  const T = top.isColor ? top : lin(top), S = side.isColor ? side : lin(side), B = bottom.isColor ? bottom : lin(bottom);
+  for (let i = 0; i < P.length; i += 9) {
+    KIT_A.fromArray(P, i); KIT_B.fromArray(P, i + 3).sub(KIT_A); KIT_C.fromArray(P, i + 6).sub(KIT_A);
+    const ny = KIT_B.cross(KIT_C).normalize().y, k = ny > 0.55 ? T : ny < -0.55 ? B : S;
+    for (let v = 0; v < 9; v += 3) { col[i + v] = k.r; col[i + v + 1] = k.g; col[i + v + 2] = k.b; }
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
+/* vertex colour as a grey ramp along local Y (a cheap ambient-occlusion / inner-glow gradient) */
+function shadeByHeight(g, y0, y1, v0, v1) {
+  const P = g.attributes.position, col = new Float32Array(P.count * 3);
+  for (let i = 0; i < P.count; i++) { const v = lerp(v0, v1, clamp((P.getY(i) - y0) / (y1 - y0), 0, 1)); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = v; }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
+/* loft a chamfered box (octagon section) through stations [z, halfW, halfH, yCentre, chamfer 0..1], z ascending.
+   faceColor(face, segment) picks each panel's colour. Faces: 0 top, 1 top-left, 2 left, 3 bottom-left, 4 bottom,
+   5 bottom-right, 6 right, 7 top-right. Caps report face -1 (front, -Z) and -2 (back) */
+function loftHull(st, faceColor) {
+  const rings = st.map(([z, w, h, y, c]) => {
+    const cw = w * c, ch = h * c;
+    return [[w - cw, h], [cw - w, h], [-w, h - ch], [-w, ch - h], [cw - w, -h], [w - cw, -h], [w, ch - h], [w, h - ch]].map(([px, py]) => [px, py + y, z]);
+  });
+  const pos = [], col = [], C = new THREE.Color();
+  const tri = (a, b, c, face, seg) => {
+    pos.push(...a, ...b, ...c);
+    const k = faceColor ? faceColor(face, seg) : 0xffffff; C.copy(k.isColor ? k : lin(k));
+    col.push(C.r, C.g, C.b, C.r, C.g, C.b, C.r, C.g, C.b);
+  };
+  for (let s = 0; s < rings.length - 1; s++) {
+    const A = rings[s], B = rings[s + 1];
+    for (let k = 0; k < 8; k++) { const k2 = (k + 1) % 8; tri(A[k], A[k2], B[k], k, s); tri(A[k2], B[k2], B[k], k, s); }
+  }
+  [[rings[0], -1], [rings[rings.length - 1], -2]].forEach(([R, f]) => {
+    const ctr = [0, R.reduce((t, p) => t + p[1], 0) / 8, R[0][2]];
+    for (let k = 0; k < 8; k++) { const k2 = (k + 1) % 8; if (f === -1) tri(ctr, R[k2], R[k], f, -1); else tri(ctr, R[k], R[k2], f, -1); }
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+/* tube through rings [x, y, z, radius] (each ring lies flat in XZ), open at both ends; twist rotates successive rings */
+function tubeGeo(rings, sides, twist) {
+  const pos = [];
+  const P = rings.map(([x, y, z, r], i) => {
+    const out = [];
+    for (let k = 0; k < sides; k++) { const a = (k / sides) * TAU + i * (twist || 0); out.push([x + Math.cos(a) * r, y, z + Math.sin(a) * r]); }
+    return out;
+  });
+  for (let i = 0; i < P.length - 1; i++) for (let k = 0; k < sides; k++) {
+    const k2 = (k + 1) % sides, a = P[i][k], b = P[i][k2], c = P[i + 1][k], d = P[i + 1][k2];
+    pos.push(...a, ...c, ...b, ...b, ...c, ...d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+const lathe = (pts, seg) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg);
+/* side profile [z, y] extruded across X and centred on x = 0 (receivers, grips, fins) */
+function profileGeo(pts, width, bevel) {
+  const s = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(-z, y)));
+  const g = new THREE.ExtrudeGeometry(s, { depth: width, bevelEnabled: !!bevel, bevelThickness: bevel || 0, bevelSize: bevel || 0, bevelSegments: 1, curveSegments: 3 });
+  g.rotateY(Math.PI / 2); g.translate(-width / 2, 0, 0);
+  return g;
+}
+/* displace a (non-indexed) polyhedron's vertices along their direction with smooth noise (rocks, asteroids) */
+function lumpy(g, n, amp, freq) {
+  const p = g.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const d = v.length(); v.multiplyScalar(1 / d);
+    const k = 1 + n(v.x * freq + v.z * 0.7, v.y * freq - v.z * 0.5) * amp + n(v.x * freq * 2.3 + 7, v.y * freq * 2.3 + v.z * 2) * amp * 0.35;
+    v.multiplyScalar(d * k); p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+/* =====================================================================
+   STARSHIP MODEL: a chunky retro-futurist fighter (Phobos). Forward = -Z, ~10 u long, ~10.6 u span.
+   Contract: guns = wing-laser muzzles, nozzles/plumes at (±1, -0.05, 3.2+), gear pads bottom out at y ≈ -2.5.
    ===================================================================== */
 function buildShipModel(env) {
   const root = new THREE.Group();
   const M = (o) => new THREE.MeshStandardMaterial(Object.assign({ envMap: env, envMapIntensity: 1.0 }, o));
-  const hull = M({ color: lin(0xe9e5dc), metalness: 0.28, roughness: 0.4 });
-  const accent = M({ color: lin(0xe0521c), metalness: 0.2, roughness: 0.42 });
-  const dark = M({ color: lin(0x262b36), metalness: 0.75, roughness: 0.32 });
-  const glass = M({ color: lin(0x0a1428), metalness: 0.9, roughness: 0.05, envMapIntensity: 1.8, emissive: lin(0x07344e), emissiveIntensity: 0.7 });
+  // one vertex-coloured material carries hull whites, panel greys, orange livery and gunmetal
+  const hullMat = M({ vertexColors: true, metalness: 0.32, roughness: 0.42, flatShading: true });
+  const glass = M({ color: lin(0x0a1428), metalness: 0.9, roughness: 0.05, envMapIntensity: 1.8, emissive: lin(0x07344e), emissiveIntensity: 0.7, flatShading: true });
   const glowCyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 3.0, 4.2) });
+  const glowStrip = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.45, 2.4, 3.4) });
   const navR = new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 0.3, 0.3) });
   const navG = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 6, 0.6) });
   const add = (geo, mat, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); (parent || root).add(m); return m; };
 
-  // fuselage: lathe profile from tail (y<0) to nose (y>0), then laid along -Z
-  const prof = [[0, -3.2], [0.72, -3.1], [0.98, -2.6], [1.18, -1.3], [1.24, 0.2], [1.06, 1.8], [0.76, 3.1], [0.38, 4.2], [0.08, 4.75], [0, 4.8]]
-    .map(([r, y]) => new THREE.Vector2(r, y));
-  const fus = new THREE.LatheGeometry(prof, 22);
-  fus.rotateX(-Math.PI / 2);
-  fus.scale(1, 0.72, 1);
-  add(fus, hull);
-  const spine = new THREE.BoxGeometry(0.5, 0.22, 4.6);
-  add(spine, accent, 0, 0.86, 0.9);
-  const chin = new THREE.BoxGeometry(1.1, 0.4, 2.4);
-  add(chin, dark, 0, -0.72, -1.4);
+  const WHITE = lin(0xd9d4c9), PANEL = lin(0xc4beb2), PANEL2 = lin(0xe3dfd6), ORANGE = lin(0xe0521c), DARK = lin(0x262b36),
+    GREY = lin(0x6f7682), HAZ = lin(0xf0b429);
+  const H = [], GLOW = [];     // hull parts [geo, colour] and static glow strips
+  const box = (w, h, d, x, y, z, rx, ry, rz) => xf(new THREE.BoxGeometry(w, h, d), x, y, z, rx, ry, rz);
+  const cylZ = (rRear, rFront, len, seg, x, y, z) => xf(new THREE.CylinderGeometry(rRear, rFront, len, seg), x, y, z, Math.PI / 2, 0, 0);
 
-  const canopy = new THREE.SphereGeometry(1, 28, 16);
-  canopy.scale(0.62, 0.5, 1.5);
-  add(canopy, glass, 0, 0.62, -1.4);
-  const frame = new THREE.TorusGeometry(0.66, 0.06, 6, 28, Math.PI);
-  const fr = add(frame, dark, 0, 0.6, -1.4); fr.rotation.y = Math.PI / 2; fr.scale.set(2.2, 0.84, 1);
+  // fuselage: panelled octagonal loft, dark belly, orange flank stripe
+  H.push([loftHull([
+    [-4.95, 0.10, 0.07, -0.08, 0.4], [-4.45, 0.42, 0.28, -0.04, 0.45], [-3.5, 0.78, 0.5, 0.0, 0.42], [-2.3, 1.02, 0.66, 0.06, 0.36],
+    [-0.8, 1.16, 0.76, 0.08, 0.32], [0.9, 1.12, 0.74, 0.06, 0.32], [2.2, 0.92, 0.6, 0.04, 0.36], [3.05, 0.62, 0.42, 0.02, 0.42]
+  ], (f, s) => {
+    if (f < 0 || (f >= 3 && f <= 5)) return DARK;
+    if ((f === 2 || f === 6) && (s === 3 || s === 4)) return ORANGE;
+    if (f === 0) return s % 2 ? PANEL2 : WHITE;
+    return s % 2 ? WHITE : PANEL;
+  }), null]);
+  H.push([box(0.5, 0.05, 0.5, 0, -0.6, -3.6), GREY]);                 // chin sensor plate
+  H.push([box(0.9, 0.12, 1.6, 0, -0.66, -1.2), DARK]);                // belly keel
 
-  function wingGeo(sign) {
-    let pts = [[0.8, -0.9], [4.9, 1.3], [5.3, 2.3], [0.8, 2.5]];
-    if (sign < 0) pts = pts.map(([x, z]) => [-x, z]).reverse();
-    const s = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z)));
-    const g = new THREE.ExtrudeGeometry(s, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 1 });
-    g.rotateX(Math.PI / 2);
-    g.translate(0, 0.1, 0);
-    return g;
-  }
+  // canopy: faceted glass bubble with a dark frame
+  const CAN = [[-3.45, 0.2, 0.08, 0.5, 0.5], [-2.9, 0.5, 0.26, 0.62, 0.5], [-2.0, 0.64, 0.4, 0.7, 0.55], [-1.05, 0.6, 0.4, 0.72, 0.55], [-0.35, 0.42, 0.26, 0.7, 0.5]];
+  const canopyGeo = loftHull(CAN);
+  CAN.slice(1, 4).forEach(([z, w, h, y, c]) => H.push([loftHull([[z - 0.06, w * 1.06, h * 1.07, y, c], [z + 0.06, w * 1.06, h * 1.07, y, c]]), DARK]));
+  H.push([loftHull(CAN.map(([z, w, h, y]) => [z, 0.04, 0.035, y + h + 0.01, 0])), DARK]);
+  H.push([loftHull([[-3.55, 0.3, 0.1, 0.48, 0.4], [-3.35, 0.32, 0.12, 0.5, 0.4]]), DARK]);
+
+  // dorsal spine behind the cockpit: orange top, vents, antenna (the chase cam looks straight at this)
+  H.push([loftHull([[-0.6, 0.3, 0.08, 0.86, 0.4], [-0.3, 0.42, 0.2, 0.92, 0.4], [1.8, 0.42, 0.22, 0.9, 0.4], [2.6, 0.3, 0.14, 0.8, 0.5]],
+    (f) => (f === 0 ? ORANGE : f < 0 || (f >= 3 && f <= 5) ? DARK : f === 1 || f === 7 ? PANEL : WHITE)), null]);
+  [0.15, 0.55, 0.95].forEach((z) => H.push([box(0.44, 0.05, 0.14, 0, 1.13, z), DARK]));
+  H.push([box(0.06, 0.5, 0.06, 0.24, 1.32, 1.9), GREY]);
+  GLOW.push(box(0.08, 0.08, 0.08, 0.24, 1.6, 1.9));
+
+  // side intakes: dark mouths, white housings
   [1, -1].forEach((s) => {
-    const w = add(wingGeo(s), hull, 0, -0.15, 0);
-    w.rotation.z = s * -0.06;
-    const stripe = add(new THREE.BoxGeometry(2.6, 0.06, 0.32), accent, s * 2.9, 0.0, 0.62);
-    stripe.rotation.y = s * -0.5;
-    const pod = add(new THREE.CylinderGeometry(0.2, 0.26, 2.6, 10), dark, s * 5.15, -0.32, 1.5);
-    pod.rotation.x = Math.PI / 2;
-    add(new THREE.SphereGeometry(0.13, 8, 6), s > 0 ? navG : navR, s * 5.15, -0.32, 0.12);
-    const gun = add(new THREE.CylinderGeometry(0.07, 0.07, 1.6, 6), dark, s * 3.2, -0.42, -0.6);
-    gun.rotation.x = Math.PI / 2;
-    const fin = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(1.5, 0), new THREE.Vector2(1.9, 1.7), new THREE.Vector2(1.25, 1.7)]);
-    const fg = new THREE.ExtrudeGeometry(fin, { depth: 0.1, bevelEnabled: false });
-    fg.rotateY(-Math.PI / 2);
-    const f = add(fg, accent, s * 0.75, 0.55, 1.2);
-    f.rotation.z = s * -0.38;
+    const g = loftHull([[-1.7, 0.26, 0.28, 0.12, 0.35], [-1.3, 0.3, 0.34, 0.12, 0.3], [-0.1, 0.32, 0.36, 0.1, 0.3], [0.9, 0.24, 0.28, 0.08, 0.45]],
+      (f) => (f === -1 ? DARK : f === 0 || f === 7 || f === 1 ? PANEL : f >= 3 && f <= 5 ? DARK : WHITE));
+    H.push([g.translate(s * 1.08, 0, 0), null]);
+    [-1.35, -1.0, -0.65].forEach((z) => H.push([box(0.04, 0.4, 0.05, s * 1.42, 0.12, z), GREY]));   // intake ribs
   });
 
+  // wings: extruded planform, white top / dark underside, orange + hazard livery, wingtip pods, under-wing lasers
+  function wingGeo(sign) {
+    let pts = [[0.8, -1.6], [2.2, -0.6], [4.9, 1.3], [5.3, 2.3], [3.1, 2.2], [0.8, 2.6]];
+    if (sign < 0) pts = pts.map(([x, z]) => [-x, z]).reverse();
+    const sh = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z)));
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 1 });
+    g.rotateX(Math.PI / 2); g.translate(0, 0.1, 0);
+    return tintByNormal(xf(g, 0, -0.15, 0, 0, 0, sign * -0.06), WHITE, GREY, DARK);
+  }
+  [1, -1].forEach((s) => {
+    H.push([wingGeo(s), null]);
+    const tip = (x) => -x * 0.06 + 0.015;                               // just above the wing's top surface at span x
+    H.push([box(2.6, 0.05, 0.3, s * 2.9, tip(2.9), 0.62, 0, s * -0.5, s * -0.06), ORANGE]);
+    H.push([box(0.9, 0.05, 0.16, s * 4.3, tip(4.3), 1.95, 0, s * -0.5, s * -0.06), HAZ]);
+    H.push([box(1.4, 0.05, 0.1, s * 2.4, tip(2.4), 2.2, 0, 0, s * -0.06), DARK]);           // flap line
+    // wingtip pod
+    H.push([loftHull([[0.0, 0.12, 0.12, 0, 0.5], [0.4, 0.22, 0.24, 0, 0.4], [2.6, 0.22, 0.24, 0, 0.4], [3.0, 0.13, 0.14, 0, 0.5]],
+      (f) => (f < 0 || (f >= 3 && f <= 5) ? DARK : f === 0 ? WHITE : f === 1 || f === 7 ? PANEL : GREY)).translate(s * 5.15, -0.32, 0), null]);
+    H.push([box(0.04, 0.5, 0.7, s * 5.15, 0.0, 2.4), ORANGE]);       // pod fin
+    GLOW.push(box(0.02, 0.04, 1.4, s * 5.38, -0.32, 1.5));
+    add(new THREE.SphereGeometry(0.12, 8, 6), s > 0 ? navG : navR, s * 5.15, -0.32, -0.04);
+    // laser: housing, barrel, muzzle brake; the beam starts at guns[i] = (±3.2, -0.42, -1.45)
+    H.push([loftHull([[-0.45, 0.1, 0.09, 0, 0.5], [-0.2, 0.16, 0.14, 0, 0.4], [1.0, 0.16, 0.14, 0, 0.4], [1.3, 0.1, 0.1, 0, 0.5]],
+      (f) => (f === 0 ? GREY : DARK)).translate(s * 3.2, -0.42, 0), null]);
+    H.push([cylZ(0.055, 0.055, 0.9, 8, s * 3.2, -0.42, -0.88), GREY]);
+    H.push([cylZ(0.085, 0.08, 0.14, 8, s * 3.2, -0.42, -1.37), DARK]);
+    [-0.6, -0.8, -1.0].forEach((z) => H.push([cylZ(0.075, 0.075, 0.04, 8, s * 3.2, -0.42, z), DARK]));   // cooling rings
+    GLOW.push(xf(new THREE.TorusGeometry(0.05, 0.015, 4, 10), s * 3.2, -0.42, -1.44));
+    // twin canted tail fins
+    const fin = new THREE.Shape([[0, 0], [1.7, 0], [2.15, 1.55], [1.6, 1.8], [1.15, 1.8]].map(([x, y]) => new THREE.Vector2(x, y)));
+    const fg = new THREE.ExtrudeGeometry(fin, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.03, bevelSegments: 1 });
+    fg.rotateY(-Math.PI / 2);
+    H.push([tintByNormal(xf(fg, s * 0.8, 0.55, 1.0, 0, 0, s * -0.38), PANEL, ORANGE, DARK), null]);
+  });
+
+  // engines: twin nacelles with dark bells, orange collars and greebled rear deck
   const nozzles = [];
   const plumes = [];
   const plumeMat = new THREE.ShaderMaterial({
@@ -1647,10 +1801,12 @@ function buildShipModel(env) {
       }`
   });
   [1, -1].forEach((s) => {
-    const eng = add(new THREE.CylinderGeometry(0.5, 0.42, 2.6, 16), dark, s * 1.0, -0.05, 1.9);
-    eng.rotation.x = Math.PI / 2;
-    const ring = add(new THREE.TorusGeometry(0.46, 0.08, 8, 20), accent, s * 1.0, -0.05, 3.2);
-    ring.rotation.y = 0;
+    H.push([loftHull([[0.3, 0.4, 0.38, 0, 0.45], [0.8, 0.56, 0.52, 0, 0.4], [2.6, 0.56, 0.52, 0, 0.4], [3.05, 0.5, 0.46, 0, 0.45]],
+      (f) => (f < 0 || (f >= 3 && f <= 5) ? DARK : f === 0 ? PANEL : f === 1 || f === 7 ? WHITE : GREY)).translate(s * 1.0, -0.05, 0), null]);
+    // exhaust bell: a closed lathe ring, so its inside renders from behind
+    H.push([xf(lathe([[0.47, 0.0], [0.5, 0.42], [0.42, 0.42], [0.36, 0.0]], 14), s * 1.0, -0.05, 3.03, Math.PI / 2, 0, 0), DARK]);
+    H.push([xf(new THREE.TorusGeometry(0.5, 0.055, 5, 16), s * 1.0, -0.05, 3.02), ORANGE]);
+    H.push([box(0.08, 0.1, 1.6, s * 1.0, 0.5, 1.7), DARK]);           // nacelle spine rail
     const disc = add(new THREE.CircleGeometry(0.4, 20), glowCyan, s * 1.0, -0.05, 3.22);
     nozzles.push(disc);
     const pg = new THREE.ConeGeometry(0.4, 4, 18, 1, true);
@@ -1660,15 +1816,27 @@ function buildShipModel(env) {
     p.renderOrder = 12;
     plumes.push(p);
   });
+  H.push([box(0.62, 0.3, 0.5, 0, 0.3, 2.85), DARK]);                   // heat-sink block between the engines
+  [-0.24, -0.12, 0, 0.12, 0.24].forEach((x) => H.push([box(0.03, 0.2, 0.46, x, 0.55, 2.85), GREY]));
+  GLOW.push(box(0.5, 0.04, 0.02, 0, 0.16, 3.11));
 
-  // landing gear (shown only when parked)
+  // landing gear (shown only when parked): housings, pistons, braces, hazard-ringed pads bottoming out at y ≈ -2.5
   const gear = new THREE.Group();
-  [[0, -1.0, -2.6], [1.8, -0.9, 1.4], [-1.8, -0.9, 1.4]].forEach(([x, y, z]) => {
-    add(new THREE.CylinderGeometry(0.09, 0.09, 1.7, 6), dark, x, y - 0.6, z, gear);
-    add(new THREE.CylinderGeometry(0.4, 0.46, 0.14, 12), dark, x, y - 1.45, z, gear);
+  const G = [];
+  [[0, -0.55, -2.6], [1.8, -0.35, 1.4], [-1.8, -0.35, 1.4]].forEach(([x, top, z]) => {
+    G.push([xf(new THREE.CylinderGeometry(0.15, 0.15, 0.7, 8), x, top - 0.35, z), GREY]);
+    G.push([xf(new THREE.CylinderGeometry(0.075, 0.075, top + 1.8, 8), x, (top - 3.0) / 2, z), WHITE]);
+    G.push([box(0.08, 1.3, 0.08, x, top - 1.0, z + 0.32, -0.35, 0, 0), DARK]);
+    G.push([xf(new THREE.CylinderGeometry(0.4, 0.46, 0.1, 10), x, -2.45, z), DARK]);
+    G.push([xf(new THREE.CylinderGeometry(0.3, 0.38, 0.06, 10), x, -2.37, z), HAZ]);
   });
+  add(mergeTinted(G), hullMat, 0, 0, 0, gear);
   gear.visible = false;
   root.add(gear);
+
+  add(mergeTinted(H), hullMat);
+  add(canopyGeo, glass);
+  add(mergeGeos(GLOW), glowStrip);
 
   root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.renderOrder === 0) o.renderOrder = 10; } });
   plumes.forEach((p) => { p.castShadow = false; p.receiveShadow = false; });
@@ -1685,22 +1853,183 @@ function buildShipModel(env) {
 }
 
 /* =====================================================================
+   MULTITOOL: first-person mining tool (Phobos). Local units before the 0.7 viewmodel scale.
+   Barrel axis at y = 0.01; the emitter tip is at (0, 0.01, -0.27), which createGround's MUZZLE relies on.
+   userData.glow is the heat-driven material (coils, canister core, emitter ring, sight lens, rear vent).
+   ===================================================================== */
+function buildMultitool(env, crystalCol) {
+  const gun = new THREE.Group();
+  const M = (o) => new THREE.MeshStandardMaterial(Object.assign({ envMap: env, envMapIntensity: 0.9 }, o));
+  const body = M({ vertexColors: true, roughness: 0.4, metalness: 0.55, flatShading: true });
+  const glass = M({ color: lin(0x10202c), roughness: 0.04, metalness: 0.1, transparent: true, opacity: 0.4, envMapIntensity: 1.8, depthWrite: false });
+  const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(crystalCol.r * 4, crystalCol.g * 4, crystalCol.b * 4) });
+  const SHELL = lin(0xd2ccbf), SHELL2 = lin(0xa39d92), DK = lin(0x1c2028), GM = lin(0x3b414d), ACC = lin(0xd9531e);
+  const AX = 0.01, B = [], G = [], GL = [];
+  const box = (w, h, d, x, y, z, rx, ry, rz) => xf(new THREE.BoxGeometry(w, h, d), x, y, z, rx, ry, rz);
+  const cylZ = (rRear, rFront, len, seg, z, x, y) => xf(new THREE.CylinderGeometry(rRear, rFront, len, seg), x || 0, y === undefined ? AX : y, z, Math.PI / 2, 0, 0);
+
+  // receiver: chamfered side profile, light shell on top, gunmetal underside
+  B.push([tintByNormal(profileGeo([[0.155, 0.045], [-0.07, 0.048], [-0.118, 0.022], [-0.118, -0.03], [-0.02, -0.042], [0.12, -0.042], [0.16, -0.012]], 0.062, 0.007), SHELL, SHELL2, GM), null]);
+  // orange top cowl and scanner sight with a glowing rear lens
+  B.push([profileGeo([[0.13, 0.05], [-0.04, 0.053], [-0.085, 0.04], [-0.06, 0.068], [0.11, 0.072]], 0.04, 0.004), ACC]);
+  B.push([box(0.026, 0.022, 0.05, 0, 0.088, 0.07), GM]);
+  G.push(box(0.014, 0.01, 0.004, 0, 0.09, 0.096));
+  // grip, trigger and an orange grip panel on the side the player sees
+  B.push([profileGeo([[0.112, -0.035], [0.052, -0.035], [0.066, -0.1], [0.08, -0.165], [0.096, -0.178], [0.142, -0.172], [0.15, -0.155], [0.138, -0.09], [0.15, -0.035]], 0.05, 0.006), DK]);
+  B.push([box(0.004, 0.08, 0.028, -0.031, -0.1, 0.1, -0.21), ACC]);
+  B.push([box(0.012, 0.032, 0.012, 0, -0.058, 0.03, -0.3), GM]);
+  B.push([box(0.012, 0.008, 0.06, 0, -0.08, 0.022), GM]);
+  // side detail: livery strip, vent slots, heat fins on the back
+  B.push([box(0.003, 0.008, 0.12, -0.0395, 0.03, 0.03), ACC]);
+  [-0.06, -0.045, -0.03, -0.015].forEach((z) => B.push([box(0.004, 0.022, 0.006, -0.039, -0.012, z), DK]));
+  [-0.016, 0, 0.016].forEach((x) => B.push([box(0.004, 0.03, 0.04, x, 0.058, 0.143), GM]));
+  G.push(box(0.03, 0.006, 0.003, 0, 0.012, 0.168));
+  // barrel: collar, exposed glowing coils inside a four-rail cage, emitter head with three prongs
+  B.push([cylZ(0.036, 0.038, 0.03, 8, -0.13), GM]);
+  B.push([cylZ(0.016, 0.016, 0.08, 8, -0.18), DK]);
+  [-0.153, -0.167, -0.181, -0.195, -0.209].forEach((z) => G.push(xf(new THREE.TorusGeometry(0.025, 0.0045, 4, 12), 0, AX, z)));
+  [0.785, 2.356, 3.927, 5.498].forEach((a) => B.push([box(0.007, 0.007, 0.08, Math.cos(a) * 0.034, AX + Math.sin(a) * 0.034, -0.181, 0, 0, a), SHELL2]));
+  B.push([cylZ(0.036, 0.034, 0.02, 8, -0.226), GM]);
+  B.push([cylZ(0.034, 0.025, 0.028, 8, -0.249), DK]);
+  // three prongs flaring outward around the tip (tilted about X, then spun into place around the barrel)
+  [Math.PI / 2, Math.PI / 2 + 2.094, Math.PI / 2 + 4.189].forEach((a) => B.push([new THREE.BoxGeometry(0.011, 0.011, 0.058).rotateX(0.32).rotateZ(a - Math.PI / 2).translate(Math.cos(a) * 0.036, AX + Math.sin(a) * 0.036, -0.257), ACC]));
+  G.push(xf(new THREE.TorusGeometry(0.019, 0.004, 4, 12), 0, AX, -0.262));
+  // side canister: glass tube with a glowing core, gunmetal end caps and a bracket
+  const CZ = 0.035, CX = -0.062, CY = 0.012;
+  GL.push(cylZ(0.02, 0.02, 0.085, 10, CZ, CX, CY));
+  G.push(cylZ(0.01, 0.01, 0.08, 6, CZ, CX, CY));
+  [CZ - 0.047, CZ + 0.047].forEach((z) => B.push([cylZ(0.024, 0.024, 0.012, 10, z, CX, CY), GM]));
+  B.push([box(0.024, 0.016, 0.06, -0.044, CY, CZ), SHELL2]);
+
+  gun.add(new THREE.Mesh(mergeTinted(B), body));
+  gun.add(new THREE.Mesh(mergeGeos(G), glow));
+  const gm = new THREE.Mesh(mergeGeos(GL), glass); gm.renderOrder = 1; gun.add(gm);
+  gun.userData.glow = glow;
+  return gun;
+}
+
+/* =====================================================================
+   MINERAL DEPOSITS: shared geometry variants for createGround's makeNode (Phobos).
+   Crystals carry a vertex-colour ramp that CRYSTAL_GLOW also applies to the emissive, so they glow from the base up.
+   Flat object of geometries (keys small0..2 / large0..2 crystal+rock, mono*); ground.dispose() frees them all.
+   ===================================================================== */
+const CRYSTAL_GLOW = (sh) => {
+  sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor;');
+};
+/* hexagonal crystal with a pointed tip, base at y = 0, coloured bright at the root and dimmer toward the tip */
+function crystalGeo(r, h) {
+  return shadeByHeight(lathe([[0, -0.2], [r * 0.85, -0.2], [r, h * 0.12], [r * 0.92, h * 0.74], [0, h]], 6), 0, h, 1.7, 0.5);
+}
+function buildMineralGeos(seed) {
+  const out = {}, n = makeNoise2D(seed + 31);
+  const rockShade = (g) => tintByNormal(g, new THREE.Color(1.15, 1.15, 1.15), new THREE.Color(0.8, 0.8, 0.8), new THREE.Color(0.5, 0.5, 0.5));
+  const rock = (sx, sy, sz, x, z, ry) => rockShade(xf(lumpy(new THREE.IcosahedronGeometry(1, 1), n, 0.28, 1.6 + ry), x, sy * 0.25, z, 0, ry, 0, sx, sy, sz));
+  ['small', 'large'].forEach((kind) => {
+    const big = kind === 'large', hs = big ? 1.6 : 1;
+    for (let v = 0; v < 3; v++) {
+      const rnd = mulberry32(seed * 7 + v * 131 + (big ? 977 : 0));
+      const C = [], R = [];
+      // main spire, then a ring of leaning satellites, then loose shards on the ground
+      C.push(xf(crystalGeo(0.42 * hs, 3.4 * hs), 0, 0.1, 0, (rnd() - 0.5) * 0.16, rnd() * TAU, (rnd() - 0.5) * 0.16));
+      const sat = big ? 7 : 4;
+      for (let i = 0; i < sat; i++) {
+        const a = (i / sat) * TAU + rnd() * 0.5, rr = (0.38 + rnd() * 0.42) * hs, t = 0.3 + rnd() * 0.42;
+        const h = (1.1 + rnd() * 1.5) * hs * (i % 3 === 0 ? 1.25 : 1);
+        C.push(xf(crystalGeo((0.22 + rnd() * 0.14) * hs, h), Math.cos(a) * rr, 0.05, Math.sin(a) * rr, t * Math.sin(a), rnd() * TAU, -t * Math.cos(a)));
+      }
+      for (let i = 0; i < (big ? 5 : 3); i++) {
+        const a = rnd() * TAU, rr = (1.0 + rnd() * 0.4) * hs, t = 0.6 + rnd() * 0.5;
+        C.push(xf(crystalGeo(0.11 * hs, (0.35 + rnd() * 0.35) * hs), Math.cos(a) * rr, 0.0, Math.sin(a) * rr, t * Math.sin(a), rnd() * TAU, -t * Math.cos(a)));
+      }
+      // rock bed: one broad lumpy slab plus two smaller stones
+      R.push(rock(1.3 * hs, 0.5 * hs, 1.2 * hs, 0, 0, rnd()));
+      for (let i = 0; i < 2; i++) {
+        const a = rnd() * TAU, rr = 1.05 * hs, s = (0.3 + rnd() * 0.25) * hs;
+        R.push(rock(s * 1.2, s * 0.8, s, Math.cos(a) * rr, Math.sin(a) * rr, rnd()));
+      }
+      out[kind + 'Cry' + v] = mergeTinted(C.map((g) => [g, null]));
+      out[kind + 'Rock' + v] = mergeTinted(R.map((g) => [g, null]));
+    }
+  });
+  // Ancient Monolith: stepped plinth, chamfered tapering obelisk with glyph inlays, a hovering halo and a floating cap
+  const W = (y) => lerp(1.0, 0.68, (y - 0.9) / 7.1);           // obelisk half-width at height y
+  const stone = [
+    [xf(new THREE.CylinderGeometry(1.7, 1.9, 0.5, 8), 0, 0.25, 0, 0, Math.PI / 8, 0), null],
+    [xf(new THREE.CylinderGeometry(1.32, 1.48, 0.45, 8), 0, 0.72, 0, 0, Math.PI / 8, 0), null],
+    [xf(loftHull([[0.9, 1.0, 1.0, 0, 0.3], [8.0, 0.68, 0.68, 0, 0.3], [8.65, 0.3, 0.3, 0, 0.55], [8.9, 0.04, 0.04, 0, 0.5]]), 0, 0, 0, -Math.PI / 2, 0, 0), null]
+  ].map(([g]) => [tintByNormal(g, new THREE.Color(1.1, 1.1, 1.1), new THREE.Color(0.85, 0.85, 0.85), new THREE.Color(0.55, 0.55, 0.55)), null]);
+  out.monoStone = mergeTinted(stone);
+  for (let v = 0; v < 2; v++) {
+    const rnd = mulberry32(seed * 3 + v * 71 + 5), gl = [];
+    // four faces × four rows of 2–4 stroke glyphs, set just proud of each face
+    for (let f = 0; f < 4; f++) {
+      const ry = f * Math.PI / 2;
+      [2.1, 3.5, 4.9, 6.3].forEach((y) => {
+        const d = W(y) + 0.012, strokes = 2 + Math.floor(rnd() * 3);
+        for (let s = 0; s < strokes; s++) {
+          const kind = rnd(), u = (rnd() - 0.5) * 0.5, v2 = (rnd() - 0.5) * 0.55;
+          const [bw, bh] = kind < 0.4 ? [0.07, 0.55] : kind < 0.8 ? [0.42, 0.07] : [0.12, 0.12];
+          const g = new THREE.BoxGeometry(bw, bh, 0.03);
+          xf(g, u, y + v2, d, -0.045, 0, 0);
+          gl.push(g.rotateY(ry));
+        }
+      });
+    }
+    // a glowing seam ring just below the pyramidion, and the hovering halo
+    gl.push(xf(loftHull([[7.72, 0.71, 0.71, 0, 0.3], [7.84, 0.71, 0.71, 0, 0.3]]), 0, 0, 0, -Math.PI / 2, 0, 0));
+    gl.push(xf(new THREE.TorusGeometry(1.15, 0.05, 4, 24), 0, 9.1, 0, Math.PI / 2, 0, 0));
+    out['monoGlyph' + v] = mergeGeos(gl);
+  }
+  // floating cap (node.spin): a long octahedron with three orbiting shards, centred on its own origin
+  const cap = [xf(new THREE.OctahedronGeometry(1, 0), 0, 0, 0, 0, 0, 0, 0.75, 1.25, 0.75)];
+  for (let i = 0; i < 3; i++) { const a = (i / 3) * TAU; cap.push(xf(new THREE.OctahedronGeometry(0.22, 0), Math.cos(a) * 1.15, (i - 1) * 0.25, Math.sin(a) * 1.15, 0, a, 0, 1, 1.8, 1)); }
+  out.monoCap = mergeGeos(cap);
+  const rb = [], rr = mulberry32(seed + 9);
+  for (let i = 0; i < 4; i++) { const a = rr() * TAU, d = 2.0 + rr() * 0.6, s = 0.3 + rr() * 0.35; rb.push([rock(s * 1.3, s, s * 1.1, Math.cos(a) * d, Math.sin(a) * d, rr()), null]); }
+  out.monoRock = mergeTinted(rb);
+  return out;
+}
+
+/* asteroid: a cratered unit-ish lump with darker crater floors and pale mineral flecks (vertex colour × instance tint) */
+/* asteroid: a cratered unit-ish lump with darker crater floors and pale mineral flecks (vertex colour × instance tint) */
+function asteroidGeo(seed) {
+  const geo = new THREE.IcosahedronGeometry(1, 2);
+  const p = geo.attributes.position, v = new THREE.Vector3();
+  const n3 = makeNoise2D(seed + 5), rnd = mulberry32(seed + 77);
+  const craters = [];
+  for (let i = 0; i < 7; i++) craters.push({ c: new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize(), r: 0.25 + rnd() * 0.3, d: 0.08 + rnd() * 0.1 });
+  const shade = new Float32Array(p.count);
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).normalize();
+    let d = 1 + n3(v.x * 1.8 + v.z, v.y * 1.8 - v.z) * 0.2 + n3(v.x * 4 + 3, v.y * 4 + v.z * 3) * 0.07, s = 1;
+    craters.forEach((k) => {
+      const t = Math.acos(clamp(v.dot(k.c), -1, 1)) / k.r;
+      if (t < 1) { d -= k.d * (1 - t * t); s -= 0.5 * (1 - t); }
+      else if (t < 1.5) d += k.d * 0.45 * Math.sin((t - 1) * Math.PI * 2);    // raised rim
+    });
+    shade[i] = s * (0.9 + n3(v.x * 6 + 11, v.z * 6 - v.y * 4) * 0.35);
+    v.multiplyScalar(d);
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  // non-indexed: colour per face from its three vertices, with the odd pale mineral fleck
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i += 3) {
+    const s = (shade[i] + shade[i + 1] + shade[i + 2]) / 3, fleck = rnd() < 0.07;
+    for (let k = 0; k < 3; k++) { col[(i + k) * 3] = fleck ? 2.6 : s; col[(i + k) * 3 + 1] = fleck ? 2.2 : s; col[(i + k) * 3 + 2] = fleck ? 1.6 : s; }
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/* =====================================================================
    ASTEROID BELT — instanced, tumbling, mineable from the cockpit
    ===================================================================== */
 function buildAsteroidBelt(env, seed) {
   const COUNT = 340, R0 = 1930, SPREAD = 140, THICK = 60;
   const rnd = mulberry32(seed);
-  const geo = new THREE.IcosahedronGeometry(1, 2);
-  const p = geo.attributes.position, v = new THREE.Vector3();
-  const n3 = makeNoise2D(seed + 5);
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i).normalize();
-    const d = 1 + n3(v.x * 1.8 + v.z, v.y * 1.8 - v.z) * 0.22 + n3(v.x * 4 + 3, v.y * 4 + v.z * 3) * 0.08;
-    v.multiplyScalar(d);
-    p.setXYZ(i, v.x, v.y, v.z);
-  }
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0.08, envMap: env, envMapIntensity: 0.5, flatShading: true });
+  const geo = asteroidGeo(seed);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.92, metalness: 0.08, envMap: env, envMapIntensity: 0.5, flatShading: true });
   const mesh = new THREE.InstancedMesh(geo, mat, COUNT);
   mesh.frustumCulled = false;
   const rocks = [];
@@ -2326,57 +2655,90 @@ function mergeGeos(list) {
   return out;
 }
 
-/* Flora / rock definitions per biome. Every prop type is one or more InstancedMeshes that share matrices. */
+/* Flora / rock definitions per biome. Every prop type is one or more InstancedMeshes that share matrices.
+   Models (Phobos): vertex-colour ramps give every prop a darker base and lit top under the per-instance tint;
+   triangle counts per instance are noted because 81 tiles × perTile multiplies them (and casters draw twice). */
 function makePropDefs(type, env) {
   const S = (o) => new THREE.MeshStandardMaterial(Object.assign({ envMap: env, envMapIntensity: 0.5, roughness: 0.85, metalness: 0.0 }, o));
-  const tuft = (h, r, count, rnd) => {
+  const rnd = mulberry32(99), n = makeNoise2D(1234);
+  // a clump of flat bent blades: 3 triangles each (base quad + tip), shaded dark at the root
+  const blades = (count, h, w, spread, bend) => {
     const list = [];
     for (let i = 0; i < count; i++) {
-      const g = new THREE.ConeGeometry(r, h * (0.6 + rnd() * 0.6), 3, 1, true);
-      g.translate(0, h * 0.4, 0); g.rotateZ((rnd() - 0.5) * 0.7); g.rotateX((rnd() - 0.5) * 0.7);
-      g.translate((rnd() - 0.5) * 0.7, 0, (rnd() - 0.5) * 0.7);
-      list.push(g);
+      const bh = h * (0.55 + rnd() * 0.6), bw = w * (0.7 + rnd() * 0.6), lean = bend * (0.5 + rnd());
+      const pos = [-bw / 2, 0, 0, bw / 2, 0, 0, bw * 0.3, bh * 0.55, lean * 0.35, -bw * 0.3, bh * 0.55, lean * 0.35, 0, bh, lean];
+      const P = (k) => pos.slice(k * 3, k * 3 + 3);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([...P(0), ...P(1), ...P(2), ...P(0), ...P(2), ...P(3), ...P(3), ...P(2), ...P(4)], 3));
+      g.computeVertexNormals();
+      shadeByHeight(g, 0, h, 0.42, 1.12);
+      list.push([xf(g, (rnd() - 0.5) * spread, 0, (rnd() - 0.5) * spread, 0, rnd() * TAU, 0), null]);
     }
-    return mergeGeos(list);
+    return mergeTinted(list);
   };
-  const rnd = mulberry32(99);
-  const rockGeo = () => { const g = new THREE.DodecahedronGeometry(1, 0); g.translate(0, 0.35, 0); return g; };
+  // rugged boulder: lumpy icosahedron (80 tris) or dodecahedron (36 tris), lit top, dark underside
+  const boulder = (detail, top, side, bottom) => {
+    const g = lumpy(detail ? new THREE.IcosahedronGeometry(1, 1) : new THREE.DodecahedronGeometry(1, 0), n, detail ? 0.22 : 0.16, 1.4);
+    g.translate(0, 0.35, 0);
+    return tintByNormal(g, top, side, bottom);
+  };
+  const grey = (v) => new THREE.Color(v, v, v);
   if (type === 'lush') {
-    const trunk = new THREE.CylinderGeometry(0.22, 0.42, 5, 7); trunk.translate(0, 2.5, 0);
-    const canopy = new THREE.IcosahedronGeometry(2.4, 1); canopy.scale(1.25, 0.6, 1.25); canopy.translate(0, 5.6, 0);
-    const cap2 = new THREE.IcosahedronGeometry(1.4, 1); cap2.scale(1.1, 0.55, 1.1); cap2.translate(0.4, 6.7, -0.2);
+    // alien parasol tree (~188 tris): curved tapering trunk under two faceted umbrella caps with shaded undersides
+    const trunk = shadeByHeight(tubeGeo([[0, -0.3, 0, 0.44], [0.08, 1.6, 0, 0.34], [0.32, 3.2, 0.05, 0.27], [0.55, 4.6, 0.1, 0.22], [0.62, 5.6, 0.12, 0.2]], 6), 0, 5.6, 0.55, 1.05);
+    const capProfile = (r, t) => [[0.05, -0.12 * t], [r * 0.35, -0.1 * t], [r * 0.92, -0.06 * t], [r, 0.12 * t], [r * 0.7, 0.5 * t], [0.05, 0.78 * t]];
+    const cap1 = shadeByHeight(lathe(capProfile(2.7, 1.3), 7), -0.15, 0.5, 0.45, 1.05);
+    const cap2 = shadeByHeight(lathe(capProfile(1.6, 1.0), 7), -0.15, 0.4, 0.5, 1.08);
+    const canopy = mergeTinted([[xf(cap1, 0.6, 5.45, 0.12), null], [xf(cap2, 0.15, 6.55, -0.3, 0, 0.6, 0), null]]);
     return [
-      { parts: [[trunk, S({ color: lin(0x6b4a5a) })], [mergeGeos([canopy, cap2]), S({ color: 0xffffff, roughness: 0.6, flatShading: true })]],
+      { parts: [[mergeTinted([[trunk, null]]), S({ color: lin(0x6b4a5a), vertexColors: true, flatShading: true })],
+        [canopy, S({ color: 0xffffff, roughness: 0.6, flatShading: true, vertexColors: true })]],
         perTile: 6, scale: [0.7, 1.6], shadow: true, maxSlope: 0.3, colorPart: 1,
         colors: [0xff7a3d, 0xff4fa3, 0x4fe3c1, 0xc7f04f, 0xffcf4a, 0xd36bff] },
-      { parts: [[tuft(1.4, 0.16, 6, rnd), S({ color: 0xffffff, side: THREE.DoubleSide })]], perTile: 26, scale: [0.6, 1.4], maxSlope: 0.45, colorPart: 0,
+      // grass clump: 8 bent blades (24 tris)
+      { parts: [[blades(8, 1.4, 0.13, 0.7, 0.35), S({ color: 0xffffff, side: THREE.DoubleSide, vertexColors: true })]], perTile: 26, scale: [0.6, 1.4], maxSlope: 0.45, colorPart: 0,
         colors: [0x58c43a, 0x3fae5c, 0x8fd84a, 0x2fbfa0] },
-      { parts: [[rockGeo(), S({ color: lin(0x8a8078), flatShading: true })]], perTile: 4, scale: [0.4, 2.2], shadow: true, maxSlope: 1, squash: true }
+      // mossy boulder (80 tris)
+      { parts: [[boulder(1, new THREE.Color(0.62, 0.95, 0.5), grey(1), grey(0.55)), S({ color: lin(0x8a8078), flatShading: true, vertexColors: true })]], perTile: 4, scale: [0.4, 2.2], shadow: true, maxSlope: 1, squash: true }
     ];
   }
   if (type === 'toxic') {
-    const spire = new THREE.ConeGeometry(1, 1, 5); spire.translate(0, 0.5, 0);
-    const stalk = new THREE.CylinderGeometry(0.07, 0.12, 1.2, 5); stalk.translate(0, 0.6, 0);
-    const bulb = new THREE.IcosahedronGeometry(0.42, 1); bulb.translate(0, 1.35, 0);
+    // twisted horn spire (50 tris): five-sided tube that spirals to a point, banded like sediment; unit size, scaled per instance
+    const ringsS = [];
+    for (let i = 0; i <= 5; i++) { const t = i / 5; ringsS.push([0.6 * t * t, t, Math.sin(t * 3) * 0.1 * t, Math.max(0.001, 1 - Math.pow(t, 0.75))]); }
+    const spire = tubeGeo(ringsS, 5, 0.5);
+    { const P = spire.attributes.position, c = new Float32Array(P.count * 3);
+      for (let i = 0; i < P.count; i += 3) { const band = Math.floor(((P.getY(i) + P.getY(i + 1) + P.getY(i + 2)) / 3) * 5); const v = band % 2 ? 1.6 : 0.62; for (let k = 0; k < 9; k++) c[i * 3 + k] = v; }
+      spire.setAttribute('color', new THREE.BufferAttribute(c, 3)); }
+    // glowing pod (~92 tris): stalk + three leaves (part 0) under an onion bulb (part 1, MeshBasic, HDR instance tint)
+    const stalk = mergeTinted([
+      [shadeByHeight(tubeGeo([[0, 0, 0, 0.12], [0.05, 0.6, 0, 0.09], [0.02, 1.15, 0, 0.07]], 5), 0, 1.2, 0.6, 1.1), null],
+      ...[0, 2.1, 4.2].map((a) => [xf(new THREE.ConeGeometry(0.16, 0.7, 3, 1, true), Math.cos(a) * 0.18, 0.25, Math.sin(a) * 0.18, 0, a, 1.0), grey(0.85)])
+    ]);
+    const bulb = lathe([[0, 0.98], [0.26, 1.06], [0.42, 1.3], [0.36, 1.55], [0.14, 1.75], [0, 1.9]], 6);
     return [
-      { parts: [[spire, S({ color: lin(0x3a0d12), roughness: 0.7, flatShading: true })]], perTile: 3, scale: [1, 1], shadow: true, maxSlope: 0.5, spire: true },
-      { parts: [[rockGeo(), S({ color: lin(0x40161a), flatShading: true })]], perTile: 5, scale: [0.5, 2.6], shadow: true, maxSlope: 1, squash: true },
-      { parts: [[stalk, S({ color: lin(0x2a1410) })], [bulb, new THREE.MeshBasicMaterial({ color: 0xffffff })]], perTile: 7, scale: [0.8, 1.6], maxSlope: 0.4, colorPart: 1,
+      { parts: [[mergeTinted([[spire, null]]), S({ color: lin(0x3a0d12), roughness: 0.7, flatShading: true, vertexColors: true })]], perTile: 3, scale: [1, 1], shadow: true, maxSlope: 0.5, spire: true },
+      { parts: [[boulder(1, new THREE.Color(1.15, 0.9, 0.75), grey(1), grey(0.5)), S({ color: lin(0x40161a), flatShading: true, vertexColors: true })]], perTile: 5, scale: [0.5, 2.6], shadow: true, maxSlope: 1, squash: true },
+      { parts: [[stalk, S({ color: lin(0x2a1410), vertexColors: true, flatShading: true })], [bulb, new THREE.MeshBasicMaterial({ color: 0xffffff })]], perTile: 7, scale: [0.8, 1.6], maxSlope: 0.4, colorPart: 1,
         colors: [[4.0, 1.4, 0.25], [2.6, 3.2, 0.3], [4.0, 0.6, 0.35]] },
-      { parts: [[tuft(1.0, 0.1, 7, rnd), S({ color: 0xffffff, side: THREE.DoubleSide })]], perTile: 22, scale: [0.6, 1.3], maxSlope: 0.45, colorPart: 0,
+      // tendrils: 8 curled spikes (24 tris)
+      { parts: [[blades(8, 1.0, 0.09, 0.6, 0.5), S({ color: 0xffffff, side: THREE.DoubleSide, vertexColors: true })]], perTile: 22, scale: [0.6, 1.3], maxSlope: 0.45, colorPart: 0,
         colors: [0x9b1f2a, 0x6e1420, 0xc0452a] }
     ];
   }
-  const shard = new THREE.OctahedronGeometry(1, 0); shard.scale(0.6, 2.4, 0.6); shard.translate(0, 1.6, 0);
-  const t1 = new THREE.CylinderGeometry(0.08, 0.3, 5.5, 6); t1.translate(0, 2.75, 0);
-  const b1 = new THREE.ConeGeometry(0.12, 2.4, 5); b1.rotateZ(1.0); b1.translate(0.8, 3.6, 0);
-  const b2 = new THREE.ConeGeometry(0.1, 2.0, 5); b2.rotateZ(-1.1); b2.rotateY(2.1); b2.translate(-0.4, 4.2, 0.6);
+  // ice: crystal shard pair (40 tris): two pentagonal prisms with pointed tips, glassy
+  const prism = (r, h) => shadeByHeight(lathe([[r, -0.7], [r, h * 0.7], [0, h]], 5), 0, h, 0.7, 1.15);
+  const shard = mergeTinted([[xf(prism(0.55, 3.6), 0, 0, 0), null], [xf(prism(0.3, 1.9), 0.55, 0, 0.2, 0.25, 0.5, -0.45), null]]);
+  // frost pine (~66 tris): tapered trunk with three tiers of icy cones, frosted tops
+  const fTrunk = shadeByHeight(tubeGeo([[0, -0.3, 0, 0.3], [0.05, 2.6, 0, 0.18], [0.02, 5.6, 0, 0.05]], 5), 0, 5.6, 0.55, 0.8);
+  const tiers = [[1.6, 1.5, 2.2], [3.0, 1.15, 1.9], [4.2, 0.8, 1.6]].map(([y, r, h]) => [shadeByHeight(xf(new THREE.ConeGeometry(r, h, 6, 1, true), 0, y + h / 2, 0, 0, rnd(), 0), y, y + h, 0.75, 1.25), null]);
   return [
-    { parts: [[shard, S({ color: lin(0x9fd8ff), roughness: 0.12, metalness: 0.2, envMapIntensity: 1.4, emissive: lin(0x1a4f86), emissiveIntensity: 0.5, flatShading: true })]],
+    { parts: [[shard, S({ color: lin(0x9fd8ff), roughness: 0.12, metalness: 0.2, envMapIntensity: 1.4, emissive: lin(0x1a4f86), emissiveIntensity: 0.5, flatShading: true, vertexColors: true })]],
       perTile: 6, scale: [0.6, 2.2], shadow: true, maxSlope: 0.6, tilt: 0.35 },
-    { parts: [[rockGeo(), S({ color: lin(0xc9d6e6), flatShading: true })]], perTile: 5, scale: [0.5, 2.4], shadow: true, maxSlope: 1, squash: true },
-    { parts: [[mergeGeos([t1, b1, b2]), S({ color: lin(0xa9bccf), roughness: 0.6 })]], perTile: 3, scale: [0.8, 1.5], shadow: true, maxSlope: 0.3 },
-    { parts: [[tuft(0.9, 0.08, 6, rnd), S({ color: lin(0x9fe3ff), side: THREE.DoubleSide, roughness: 0.4 })]], perTile: 12, scale: [0.6, 1.2], maxSlope: 0.4 }
+    { parts: [[boulder(0, grey(1.2), grey(0.85), grey(0.55)), S({ color: lin(0xc9d6e6), flatShading: true, vertexColors: true })]], perTile: 5, scale: [0.5, 2.4], shadow: true, maxSlope: 1, squash: true },
+    { parts: [[mergeTinted([[fTrunk, null], ...tiers]), S({ color: lin(0xa9bccf), roughness: 0.6, flatShading: true, vertexColors: true, side: THREE.DoubleSide })]], perTile: 3, scale: [0.8, 1.5], shadow: true, maxSlope: 0.3 },
+    // frost tufts: 6 stiff spikes (18 tris)
+    { parts: [[blades(6, 0.9, 0.1, 0.55, 0.12), S({ color: lin(0x9fe3ff), side: THREE.DoubleSide, roughness: 0.4, vertexColors: true })]], perTile: 12, scale: [0.6, 1.2], maxSlope: 0.4 }
   ];
 }
 
@@ -2660,8 +3022,8 @@ function createGround(bodyId) {
   /* ---------------- mining nodes ---------------- */
   const crystalCol = lin(theme.crystal);
   const nodes = [], pickables = [];
-  const nodeGeo = { oct: new THREE.OctahedronGeometry(1, 0), rock: new THREE.DodecahedronGeometry(1, 0), col: new THREE.CylinderGeometry(1.1, 1.5, 9, 6), ring: new THREE.CylinderGeometry(1, 1, 0.22, 6, 1, true) };
-  const rockMat = new THREE.MeshStandardMaterial({ color: lin(theme.monolith), roughness: 0.8, envMap: env, envMapIntensity: 0.4, flatShading: true });
+  const nodeGeo = buildMineralGeos(seed);
+  const rockMat = new THREE.MeshStandardMaterial({ color: lin(theme.monolith), roughness: 0.8, envMap: env, envMapIntensity: 0.4, flatShading: true, vertexColors: true });
 
   function makeNode(kind, x, z, rnd) {
     const g = new THREE.Group();
@@ -2674,27 +3036,25 @@ function createGround(bodyId) {
       g.add(m); node.meshes.push(m); return m;
     };
     if (kind === 'monolith') {
-      const stone = new THREE.MeshStandardMaterial({ color: lin(theme.monolith), roughness: 0.45, metalness: 0.35, envMap: env, emissive: crystalCol, emissiveIntensity: 0 });
+      const stone = new THREE.MeshStandardMaterial({ color: lin(theme.monolith), vertexColors: true, roughness: 0.45, metalness: 0.35, envMap: env, emissive: crystalCol, emissiveIntensity: 0, flatShading: true });
       const glyph = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: crystalCol, emissiveIntensity: 2.6 });
       node.mats.push({ m: glyph, base: 2.6 }, { m: stone, base: 0 });
-      addM(nodeGeo.col, stone, 0, 4.4, 0, 1, 1, 1, 0, 0, 0);
-      [1.9, 4.4, 6.9].forEach((y) => { const r = lerp(1.5, 1.1, y / 9) + 0.06; addM(nodeGeo.ring, glyph, 0, y, 0, r, 1, r); });
-      node.spin = addM(nodeGeo.oct, glyph, 0, 10.2, 0, 0.8, 1.2, 0.8);
-      addM(nodeGeo.rock, rockMat, 1.3, 0.2, 0.6, 1.2, 0.7, 1.1);
+      addM(nodeGeo.monoStone, stone, 0, 0, 0, 1, 1, 1);
+      addM(nodeGeo['monoGlyph' + (Math.floor(node.phase * 10) % 2)], glyph, 0, 0, 0, 1, 1, 1);
+      node.spin = addM(nodeGeo.monoCap, glyph, 0, 10.2, 0, 1, 1, 1);
+      addM(nodeGeo.monoRock, rockMat, 0, 0, 0, 1, 1, 1);
       Object.assign(node, { name: 'Ancient Monolith', maxHp: 230, yield: 55 + Math.floor(rnd() * 16), radius: 1.9, top: 11 });
       g.rotation.set((rnd() - 0.5) * 0.12, rnd() * TAU, (rnd() - 0.5) * 0.12);
     } else {
-      const big = kind === 'large';
-      const mat = new THREE.MeshStandardMaterial({ color: crystalCol.clone().multiplyScalar(0.3), emissive: crystalCol, emissiveIntensity: big ? 1.35 : 1.1,
-        roughness: 0.16, metalness: 0.2, envMap: env, envMapIntensity: 1.3, flatShading: true });
+      const big = kind === 'large', v = Math.floor(node.phase * 7) % 3, k = big ? 'large' : 'small';
+      const mat = new THREE.MeshStandardMaterial({ color: crystalCol.clone().multiplyScalar(0.3), vertexColors: true, emissive: crystalCol, emissiveIntensity: big ? 1.35 : 1.1,
+        roughness: 0.14, metalness: 0.25, envMap: env, envMapIntensity: 1.4, flatShading: true });
+      mat.onBeforeCompile = CRYSTAL_GLOW;     // emissive follows the vertex ramp: bright roots, dimmer tips
       node.mats.push({ m: mat, base: mat.emissiveIntensity });
-      const n = big ? 7 : 4, hs = big ? 1.6 : 1;
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * TAU + rnd() * 0.6, r = i === 0 ? 0 : 0.5 + rnd() * 0.7 * hs;
-        const sy = (i === 0 ? 3.2 : 1.4 + rnd() * 1.8) * hs, sxz = (0.45 + rnd() * 0.35) * hs;
-        addM(nodeGeo.oct, mat, Math.cos(a) * r, sy * 0.55, Math.sin(a) * r, sxz, sy, sxz, Math.sin(a) * r * 0.45, rnd() * TAU, -Math.cos(a) * r * 0.45);
-      }
-      addM(nodeGeo.rock, rockMat, 0, 0, 0, 1.3 * hs, 0.45 * hs, 1.2 * hs);
+      addM(nodeGeo[k + 'Cry' + v], mat, 0, 0, 0, 1, 1, 1);
+      addM(nodeGeo[k + 'Rock' + v], rockMat, 0, 0, 0, 1, 1, 1);
+      // the old builder drew 18 / 33 numbers here; burn the same count so every later deposit spawns where it always did
+      for (let i = big ? 33 : 18; i > 0; i--) rnd();
       Object.assign(node, big ? { name: 'Carbon Crystal Cluster', maxHp: 150, yield: 30 + Math.floor(rnd() * 11), radius: 2.3, top: 6 }
         : { name: 'Carbon Crystal', maxHp: 75, yield: 12 + Math.floor(rnd() * 7), radius: 1.4, top: 4 });
       g.rotation.y = rnd() * TAU;
@@ -2767,21 +3127,7 @@ function createGround(bodyId) {
   const vmSun = new THREE.DirectionalLight(sunRGB.clone().multiplyScalar(1 / sunMax), theme.sunI * 0.8);
   vmSun.position.copy(theme.sunDir).multiplyScalar(10);
   vmScene.add(vmSun, new THREE.HemisphereLight(new THREE.Color().fromArray(theme.hemiSky), new THREE.Color().fromArray(theme.hemiGround), theme.hemiI));
-  const gun = new THREE.Group();
-  {
-    const M = (o) => new THREE.MeshStandardMaterial(Object.assign({ envMap: env, envMapIntensity: 0.9 }, o));
-    const shell = M({ color: lin(0x6c6862), roughness: 0.5, metalness: 0.5 }), dk = M({ color: lin(0x1c2028), roughness: 0.3, metalness: 0.8 }),
-      acc = M({ color: lin(0xd9531e), roughness: 0.42 }), glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(crystalCol.r * 4, crystalCol.g * 4, crystalCol.b * 4) });
-    const add = (geo, mat, x, y, z, rx) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx) m.rotation.x = rx; gun.add(m); return m; };
-    add(new THREE.BoxGeometry(0.07, 0.085, 0.24), shell, 0, 0, 0);
-    add(new THREE.BoxGeometry(0.045, 0.03, 0.2), acc, 0, 0.055, -0.01);
-    add(new THREE.CylinderGeometry(0.02, 0.028, 0.16, 10), dk, 0, 0.01, -0.19, Math.PI / 2);
-    add(new THREE.TorusGeometry(0.027, 0.008, 6, 14), glow, 0, 0.01, -0.27);
-    add(new THREE.CylinderGeometry(0.022, 0.022, 0.12, 10), glow, 0.046, -0.012, 0.02, Math.PI / 2);
-    add(new THREE.BoxGeometry(0.05, 0.12, 0.06), dk, 0, -0.085, 0.07, -0.3);
-    add(new THREE.BoxGeometry(0.075, 0.05, 0.05), dk, 0, -0.01, 0.13);
-    gun.userData.glow = glow;
-  }
+  const gun = buildMultitool(env, crystalCol);
   const GUN_BASE = new THREE.Vector3(0.2, -0.17, -0.5), MUZZLE = new THREE.Vector3(0.2, -0.163, -0.69);
   gun.scale.setScalar(0.7);
   gun.rotation.y = 0.06;
