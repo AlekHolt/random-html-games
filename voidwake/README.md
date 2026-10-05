@@ -2,11 +2,11 @@
 
 *Part of [Random HTML Games](../README.md).*
 
-A space exploration game inspired by No Man's Sky, in a single HTML file. Fly a starship around a
-procedurally shaded star system, dive through an atmosphere, land, and mine crystal deposits for the
-carbon that keeps your fuel tank alive. There are no models, textures or sound files. Every planet,
-nebula, ship, crystal and sound is generated in code: about 3,000 lines of JavaScript and GLSL on top
-of three.js r128.
+A space exploration game inspired by No Man's Sky, in a single HTML file. Pulse-drive across a vast,
+procedurally shaded star system of ten bodies, dive through an atmosphere, land, and mine crystal
+deposits for the carbon that keeps your fuel tank alive. There are no models, textures or sound files.
+Every planet, city, nebula, ship, crystal and sound is generated in code: about 5,000 lines of
+JavaScript and GLSL on top of three.js r128.
 
 **[▶ Play it](https://alekholt.github.io/random-html-games/voidwake/)** · or download `index.html` and double-click it.
 
@@ -22,9 +22,12 @@ of three.js r128.
 | `W` / `S` | Thrust / reverse |
 | `A` / `D` | Roll |
 | `←` `→` `↑` `↓` | Strafe (lateral / vertical) |
-| `Shift` | Pulse boost (burns fuel fast) |
+| `Shift` | Boost (burns fuel fast) |
+| `Space` | Engage / disengage the **pulse drive** (7,000 u/s cruise; `S` also drops out) |
+| `N` | Open the **system map**: click a world for details, double-click or **Set course** to target it |
+| `Tab` | Cycle the navigation target through every body |
+| Hold `Q` | Turn the nose onto the navigation target |
 | Hold left mouse | Mine asteroids with the wing lasers |
-| `Tab` | Cycle the active target (nearest → each body) |
 | `E` | Enter the atmosphere of the planet you are next to |
 
 **On a planet**
@@ -41,8 +44,22 @@ of three.js r128.
 `J` opens the survey log. `F` turns carbon into fuel anywhere: 1 C buys 2%, up to 20% per press, and you only pay for what fits
 in the tank. `M` mutes. `Esc` pauses, which silences the world and ducks the music.
 
-The system ends at an outer boundary about 5,000 u from the sun. Past the warning line, outward thrust
+The system ends at the heliopause, about 944,000 u from the sun. Past the warning line, outward thrust
 fades out and the ship is braked to a stop before the edge, without burning fuel against it.
+
+### Getting around
+
+The Halcyon Expanse is about 40 times larger than the original system. Neighbouring worlds are roughly
+110,000 u apart: minutes on thrusters, about 20 seconds on the pulse drive. A typical jump:
+
+1. Press `N`, pick a world on the map and **Set course** (or press `Tab` in flight).
+2. Hold `Q` until the target bracket sits in the reticle.
+3. Press `Space`. The drive charges for 1.4 s, then accelerates to 7,000 u/s. It burns 0.15% fuel a second.
+4. The drive drops out on its own about two planet radii above any world you are heading into, at the
+   boundary, on an asteroid strike or when the tank runs dry. From there, thrust in and press `E`.
+
+The drive can't be engaged right next to a world, and steering is reduced while it's running. The HUD
+shows the target's distance and pulse ETA.
 
 ## The loop
 
@@ -53,31 +70,42 @@ An empty tank never strands you: emergency thrusters still give 20% thrust.
 
 ### The Halcyon Survey
 
-The goal is to survey the whole system. Seven objectives are tracked in the HUD's **Survey Log**; press
-`J` for the full list:
+The goal is to survey the whole system. Fifteen objectives are tracked in the HUD's **Survey Log**;
+press `J` for the full list:
 
-- Land on Eden Thalos, Vharun and Kryo-7.
+- Land on each of the seven wild worlds: Eden Thalos, Sahri, Thalassa, Vharun, Umbra, Kryo-7 and
+  Crysalis.
 - On each, find and decode its **Ancient Waystone**, a glyph-carved obelisk with a gold light beacon that
   stands 75–125 u from the landing site. The scanner (`C`) tags it, and `E` decodes it for +30 C and a
   glyph word.
 - Survey **Okara Major** by flying into close orbit (+20 C). The gas giant can't be landed on, but it
   counts.
 
-Completing all seven pays a +100 C bonus.
+Completing all fifteen pays a +100 C bonus.
 
 **Progress saves automatically** in the browser (`localStorage`): carbon, fuel, worlds visited, glyphs,
-the survey and stats. It saves every few seconds, on every milestone, and when the tab closes. The
+the survey, stats and navigation target. It saves every few seconds, on every milestone, and when the tab closes. The
 title screen shows your saved voyage, and **New voyage** (click twice) erases it. A blocked, private or
 corrupt store just means a fresh start.
 
-The system has four landable or visible bodies:
+The system has ten bodies, from the sun outwards:
 
 | Body | Class | Surface |
 | --- | --- | --- |
+| **Sahri** | Desert world | Golden dunes, sandstone arches, ribbed succulents and bone-white spires in a hot haze |
 | **Eden Thalos** | Paradise world | Rolling meadows, lakes, candy-coloured canopy trees, cyan crystals |
+| **Aurelia** | Core world, capital | An ultra-wealthy ecumenopolis: ivory and gold districts, park belts, reflecting lakes, gold lights at night |
+| **Thalassa** | Ocean world | A turquoise ocean of small sandy islands with leaning palms and coral-crystal shores |
 | **Vharun** | Toxic wasteland | Terraced crimson dunes, black spires, glowing pods, amber sludge |
+| **Noctis** | Core world, undercity | A lawless, soot-dark megacity under smog, with neon that never switches off |
+| **Umbra** | Twilight jungle | Permanent dusk, lit by glowing fungus trees, luminous ferns and floating spore pods |
 | **Okara Major** | Ringed gas giant | No solid surface; flying into it pushes you back out |
 | **Kryo-7** | Frozen moon of Okara | Snowfields, ice shards, frost trees, Okara filling the sky |
+| **Crysalis** | Prismatic anomaly | Pale glass plains with iridescent spires, crystal trees and shards |
+
+The two city worlds can't be docked at yet: their districts, trade and people arrive in the next
+update. Three asteroid fields drift alongside Eden (Verdant Drift), Noctis (Kessler Reach) and Okara
+(Okara Shoals).
 
 ![Kryo-7](screenshots/kryo.jpg)
 
@@ -87,8 +115,9 @@ The system has four landable or visible bodies:
 ridged multifractal noise. Each vertex samples the height field three times to rebuild its normal on
 the tangent plane, so continents, mountains and coastlines are lit correctly. The fragment shader
 colours by height, slope and latitude. Eden gets oceans with a sun glint and polar caps, Vharun
-gets glowing lava basins and sulfur streaks, and Kryo gets frozen seas with fractures. Clouds are a
-separate animated fBm shell.
+gets glowing lava basins and sulfur streaks, and Kryo gets frozen seas with fractures. The city worlds
+use a latitude/longitude street grid, noise districts and highway runs, with clustered lights that come
+up at dusk; Crysalis gets a view-dependent soap-film sheen. Clouds are a separate animated fBm shell.
 
 **Atmospheres** are an analytic single-scattering shell. Each pixel intersects the view ray with the
 atmosphere and planet spheres, integrates an exponential density profile across the chord with
@@ -99,6 +128,16 @@ so the haze also works from within the atmosphere.
 rings are four concentric `RingGeometry` bands sharing one procedural density profile, with a
 Cassini-style gap. The planet casts its shadow onto the rings, and the rings cast shadows back onto
 the planet.
+
+**Scale** uses a floating origin and scaled-space rendering. Physics runs in a local frame that is
+re-centred on the ship whenever it strays 4,000 u, so 32-bit GPU maths never sees large coordinates.
+Bodies are drawn in scaled space: anything beyond 40,000 u is pulled toward the camera and shrunk by
+the same factor, which keeps its direction and angular size exact while staying inside a modest depth
+range. Each planet's lighting takes a sun direction instead of a position, so it's unaffected.
+
+**The system map** is a 2D canvas drawn from the same orbital data: orbits, asteroid fields, the
+heliopause, the ship's heading and a course line with the pulse ETA. It zooms around the cursor, and
+moons and fields are pushed off their parents so they stay legible at any zoom.
 
 **The sky** is a nebula baked once into a 1024² cubemap from fBm in neon pink, cyan and violet. On
 top sit 2,000 twinkling point stars clustered along a galactic band. The same cubemap feeds a PMREM

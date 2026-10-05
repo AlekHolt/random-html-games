@@ -114,6 +114,7 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
     <div class="lbl">Velocity</div>
     <div class="flex items-baseline gap-2 mt-1"><span id="spdVal" class="val">0</span><span class="lbl tracking-[.2em]">u/s</span></div>
     <div class="bar mt-2"><i id="spdBar" style="transform:scaleX(0)"></i></div>
+    <div id="pulseBadge" class="mono text-[11px] tracking-[.12em] text-cy mt-2 pulse" style="display:none">PULSE DRIVE</div>
     <div class="hud-coords lbl mt-3">Coordinates</div>
     <div class="hud-coords mono text-[12px] text-cyan-200 mt-1 leading-5">
       X <span id="cX">0</span><br>Y <span id="cY">0</span><br>Z <span id="cZ">0</span>
@@ -179,8 +180,9 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
       <div><span class="key">Mouse</span>Pitch / yaw</div>
       <div><span class="key">W</span><span class="key">S</span>Thrust / reverse</div>
       <div><span class="key">A</span><span class="key">D</span>Roll · <span class="key">←→↑↓</span>Strafe</div>
-      <div><span class="key">Shift</span>Pulse boost</div>
-      <div><span class="key">LMB</span>Mine asteroids</div>
+      <div><span class="key">Shift</span>Boost · <span class="key">Space</span>Pulse drive</div>
+      <div><span class="key">N</span>System map · <span class="key">Tab</span>Next target</div>
+      <div><span class="key">Q</span>Align to target · <span class="key">LMB</span>Mine</div>
       <div><span class="key">E</span>Enter atmosphere</div>
     </div>
     <div class="g-only">
@@ -264,11 +266,11 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
 <section id="intro" class="fixed inset-0 z-50 flex items-center">
   <div class="absolute inset-0 pointer-events-none" style="background:linear-gradient(90deg,rgba(3,5,12,.88) 0%,rgba(3,5,12,.55) 38%,rgba(3,5,12,0) 70%)"></div>
   <div class="relative px-6 sm:px-14 max-w-[640px]">
-    <div class="lbl tracking-[.5em]">Halcyon System · Procedural Frontier</div>
+    <div class="lbl tracking-[.5em]">Halcyon Expanse · Procedural Frontier</div>
     <h1 class="title-grad font-orb font-black text-[48px] sm:text-[78px] leading-none tracking-[.06em] mt-4">VOIDWAKE</h1>
     <p class="text-[17px] leading-relaxed font-semibold text-slate-300 mt-5 max-w-[52ch]">
-      A star system generated entirely in code. Fly between a paradise world, a crimson toxic wasteland
-      and a ringed gas giant with its frozen moon. Dive through the atmosphere, land, and mine
+      A vast star system generated entirely in code. Pulse between seven wild worlds, a ringed gas giant
+      and two city planets: gilded Aurelia and lawless Noctis. Dive through the atmosphere, land, and mine
       crystal deposits for carbon to keep your fuel tank alive.
     </p>
     <div class="flex flex-wrap items-center gap-5 mt-8">
@@ -279,6 +281,7 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
       <div><span class="key">Mouse</span>Steer / look</div><div><span class="key">W</span><span class="key">S</span>Thrust</div>
       <div><span class="key">A</span><span class="key">D</span>Roll / strafe</div><div><span class="key">Shift</span>Boost</div>
       <div><span class="key">E</span>Land / launch</div><div><span class="key">LMB</span>Mine</div>
+      <div><span class="key">Space</span>Pulse drive</div><div><span class="key">N</span>System map</div>
     </div>
     <div id="touchNote" class="lbl mt-6 text-am/80" style="display:none">Needs a keyboard &amp; mouse</div>
     <div id="saveLine" class="mt-6 text-[13px] font-semibold tracking-[.08em] text-slate-400" style="display:none">
@@ -286,6 +289,26 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
       <button id="newVoyage" class="ml-3 lbl text-slate-300 hover:text-white underline decoration-dotted underline-offset-4">New voyage</button>
     </div>
   </div>
+</section>
+
+<!-- system map (N) -->
+<section id="navMap" class="fixed inset-0 z-[55]" style="display:none;background:radial-gradient(ellipse at 40% 50%,rgba(8,14,30,.93),rgba(2,4,10,.97))">
+  <canvas id="navCanvas" class="absolute inset-0 w-full h-full"></canvas>
+  <div class="absolute left-5 top-5 sm:left-7 sm:top-6 pointer-events-none">
+    <div class="lbl tracking-[.5em]">System map</div>
+    <div class="font-orb font-black text-[22px] sm:text-[28px] tracking-[.12em] text-white mt-2">HALCYON EXPANSE</div>
+    <div class="text-[13px] font-semibold tracking-[.08em] text-slate-400 mt-2 max-w-[min(620px,calc(100vw-370px))]">Click a world for details · double-click to set course · scroll to zoom · drag to pan · <span class="key">N</span> or <span class="key">Esc</span> to close</div>
+  </div>
+  <div id="navSide" class="absolute right-4 top-4 bottom-12 sm:right-6 sm:top-6 sm:bottom-14 w-[min(310px,calc(100vw-32px))] flex flex-col gap-3">
+    <div id="navInfo" class="panel px-5 py-4 shrink-0" style="display:none">
+      <div id="navInfoClass" class="lbl"></div>
+      <div id="navInfoName" class="mono text-[20px] text-white mt-1"></div>
+      <div id="navInfoBody" class="text-[13.5px] font-semibold leading-6 text-slate-300 mt-3"></div>
+      <button id="navSetCourse" class="launch-btn mt-4 w-full" style="padding:11px 14px;font-size:11.5px">Set course</button>
+    </div>
+    <div id="navList" class="panel px-3 py-3 min-h-0 flex-1 overflow-y-auto"></div>
+  </div>
+  <button id="navClose" class="absolute right-5 bottom-4 sm:right-7 sm:bottom-5 lbl text-slate-300 hover:text-white">Close map ✕</button>
 </section>
 
 <!-- pause -->
@@ -335,6 +358,7 @@ const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
 const linArr = (hex) => { const c = lin(hex); return [c.r, c.g, c.b]; };
 const cssRGB = (c) => `rgb(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)})`;
 const fmtDist = (d) => (d >= 10000 ? (d / 1000).toFixed(1) + 'k u' : d >= 1000 ? (d / 1000).toFixed(2) + 'k u' : Math.round(d) + ' u');
+const fmtEta = (s) => (s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm' : s >= 90 ? Math.floor(s / 60) + 'm ' + String(Math.floor(s % 60)).padStart(2, '0') + 's' : Math.max(1, Math.round(s)) + 's');
 const $ = (id) => document.getElementById(id);
 
 /* Seeded 2D simplex noise (Gustavson) — used for all CPU-side terrain. */
@@ -751,6 +775,8 @@ const Sound = {
     this.tone(rising ? 60 : 140, dur, { slideTo: rising ? 160 : 45, vol: 0.25, attack: dur * 0.5 });
   },
   boost() { this.noiseBurst(0.9, { freq: 400, slideTo: 2400, q: 1.2, vol: 0.35, attack: 0.05 }); this.tone(90, 0.8, { slideTo: 220, vol: 0.2 }); },
+  // pulse drive spooling up: a rising whine over a building rumble
+  pulseCharge() { this.tone(180, 1.5, { slideTo: 1400, type: 'sawtooth', vol: 0.05, attack: 1.2 }); this.noiseBurst(1.5, { freq: 300, slideTo: 3000, q: 1.5, vol: 0.25, attack: 1.3 }); },
   // waystone decoded: a rising A-minor arpeggio over a low swell
   glyph() {
     [440, 523.25, 659.25, 880, 1046.5].forEach((f, i) => this.tone(f, 1.6, { type: 'triangle', vol: 0.09, delay: i * 0.11, verb: 0.7 }));
@@ -878,6 +904,21 @@ float heightAt(vec3 n){
   float r = ridge(p * 1.55, 6);
   float b = fbm(p * 0.6 + 2.0, 3);
   return r * 1.05 + b * 0.45 - 0.42;
+#elif defined(TYPE_DESERT)
+  float b = fbm(p, 4);
+  float mesa = smoothstep(0.15, 0.32, fbm(p * 0.8 + 5.0, 3)) * 0.55;
+  return b * 0.55 + mesa + abs(snoise(p * 6.0)) * 0.08;
+#elif defined(TYPE_BIOLUM)
+  float c = fbm(p, 5);
+  return c * 0.9 + 0.08 + smoothstep(0.05, 0.5, c) * ridge(p * 2.0 + 1.7, 3) * 0.45;
+#elif defined(TYPE_OCEAN)
+  float c = fbm(p, 5);
+  return c * 1.1 + smoothstep(0.2, 0.6, c) * 0.3;
+#elif defined(TYPE_PRISM)
+  float r = ridge(p * 1.8, 5);
+  return r * 0.9 + fbm(p * 0.7, 3) * 0.3 - 0.25;
+#elif defined(TYPE_CITY_N) || defined(TYPE_CITY_A)
+  return fbm(p, 3) * 0.3;
 #else
   float b = fbm(p, 5);
   float cr = pow(1.0 - abs(snoise(p * 2.6 + 11.0)), 14.0);
@@ -888,13 +929,14 @@ float dispR(float h){ return 1.0 + (max(h, uSea) - uSea) * uAmp; }
 `;
 
 function makePlanetMaterial(body) {
-  const defs = { lush: 'TYPE_LUSH', toxic: 'TYPE_TOXIC', ice: 'TYPE_ICE' };
+  const defs = { lush: 'TYPE_LUSH', toxic: 'TYPE_TOXIC', ice: 'TYPE_ICE', desert: 'TYPE_DESERT', biolum: 'TYPE_BIOLUM',
+    ocean: 'TYPE_OCEAN', prism: 'TYPE_PRISM', cityN: 'TYPE_CITY_N', cityA: 'TYPE_CITY_A' };
   return new THREE.ShaderMaterial({
     defines: { [defs[body.type]]: '' },
     extensions: { derivatives: true },
     uniforms: {
       uSeed: { value: body.seed }, uAmp: { value: body.amp }, uSea: { value: body.sea }, uFreq: { value: body.freq },
-      uSunPos: { value: new THREE.Vector3() }, uAtmo: { value: new THREE.Color().fromArray(body.atmo) }, uTime: { value: 0 }
+      uSunDir: { value: new THREE.Vector3(1, 0, 0) }, uAtmo: { value: new THREE.Color().fromArray(body.atmo) }, uTime: { value: 0 }
     },
     vertexShader: GLSL_NOISE + PLANET_HEIGHT + `
       varying vec3 vObj; varying vec3 vWPos; varying vec3 vWNorm; varying vec3 vSNorm; varying float vH;
@@ -917,16 +959,17 @@ function makePlanetMaterial(body) {
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: GLSL_NOISE + `
-      uniform vec3 uSunPos, uAtmo; uniform float uSea, uTime, uSeed;
+      uniform vec3 uSunDir, uAtmo; uniform float uSea, uTime, uSeed;
       varying vec3 vObj; varying vec3 vWPos; varying vec3 vWNorm; varying vec3 vSNorm; varying float vH;
       void main(){
         vec3 n = normalize(vObj);
         vec3 N = normalize(vWNorm), S = normalize(vSNorm);
-        vec3 L = normalize(uSunPos - vWPos), V = normalize(cameraPosition - vWPos);
+        vec3 L = normalize(uSunDir), V = normalize(cameraPosition - vWPos);
         float dn = snoise(n * 36.0 + uSeed) * 0.6 + snoise(n * 95.0 - uSeed) * 0.3;
         float h = vH + dn * 0.028;
         float slope = 1.0 - dot(N, S);
         float lat = abs(n.y);
+        float term = smoothstep(-0.12, 0.25, dot(S, L));
         vec3 col; vec3 emis = vec3(0.0); float sea = 0.0; float gloss = 0.0;
       #if defined(TYPE_LUSH)
         if (h < uSea) {
@@ -961,6 +1004,88 @@ function makePlanetMaterial(body) {
           col = mix(col, vec3(0.75, 0.48, 0.05), sul * 0.55 * (1.0 - smoothstep(0.05, 0.2, slope)));
           emis += vec3(2.0, 0.22, 0.02) * smoothstep(0.035, 0.0, e);
         }
+      #elif defined(TYPE_DESERT)
+        float e = h - uSea;
+        float dune = 0.5 + 0.5 * sin(dot(n, vec3(31.0, 7.0, 23.0)) + snoise(n * 9.0 + uSeed) * 2.5);
+        col = mix(vec3(0.62, 0.42, 0.2), vec3(0.85, 0.64, 0.34), dune);
+        col = mix(col, vec3(0.45, 0.17, 0.07), smoothstep(0.08, 0.22, slope));
+        col = mix(col, vec3(0.88, 0.84, 0.74), smoothstep(0.25, 0.05, e) * 0.7);
+        col = mix(col, vec3(0.33, 0.12, 0.05), smoothstep(1.05, 1.35, e + dn * 0.2));
+      #elif defined(TYPE_BIOLUM)
+        if (h < uSea) {
+          sea = 1.0; gloss = 0.6;
+          col = vec3(0.004, 0.01, 0.03);
+          float plankton = smoothstep(0.55, 0.9, snoise(n * 30.0 + vec3(uTime * 0.02)) * 0.5 + 0.5);
+          emis = vec3(0.05, 0.7, 0.8) * plankton * (1.0 - smoothstep(0.0, 0.2, uSea - h));
+          N = S;
+        } else {
+          float e = h - uSea;
+          col = mix(vec3(0.05, 0.02, 0.09), vec3(0.1, 0.05, 0.17), smoothstep(0.0, 0.4, e + dn * 0.1));
+          col = mix(col, vec3(0.02, 0.08, 0.08), smoothstep(0.55, 0.85, snoise(n * 6.0 + uSeed) * 0.5 + 0.5));
+          float glow = smoothstep(0.6, 0.9, snoise(n * 14.0 + uSeed * 2.0) * 0.5 + 0.5);
+          vec3 gc = mix(vec3(0.1, 1.6, 1.3), vec3(1.4, 0.2, 1.3), step(0.5, snoise(n * 3.0 + 9.0) * 0.5 + 0.5));
+          emis = gc * glow * 0.4;
+        }
+      #elif defined(TYPE_OCEAN)
+        if (h < uSea) {
+          sea = 1.0; gloss = 1.0;
+          float dep = clamp((uSea - h) / 0.35, 0.0, 1.0);
+          col = mix(vec3(0.05, 0.55, 0.62), vec3(0.005, 0.06, 0.2), pow(dep, 0.45));
+          N = S;
+        } else {
+          float e = h - uSea;
+          col = mix(vec3(0.85, 0.78, 0.55), vec3(0.12, 0.5, 0.15), smoothstep(0.0, 0.05, e));
+          col = mix(col, vec3(0.05, 0.32, 0.12), smoothstep(0.08, 0.2, e + dn * 0.1));
+        }
+      #elif defined(TYPE_PRISM)
+        float e = h - uSea;
+        float facet = snoise(n * 6.0 + uSeed) * 0.5 + 0.5 + snoise(n * 21.0 - uSeed) * 0.08;
+        vec3 irid = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + dot(N, V) * 1.6 + facet * 2.0 + uTime * 0.02));
+        irid = pow(irid, vec3(2.2));   // saturate the soap-film hues
+        col = mix(vec3(0.24, 0.2, 0.34), irid * 0.6 + 0.03, 0.6 + 0.3 * smoothstep(0.05, 0.25, slope));
+        col = mix(col, vec3(0.78, 0.76, 0.92), smoothstep(0.7, 0.95, h + dn * 0.2) * 0.6);
+        gloss = 0.5;
+      #elif defined(TYPE_CITY_N) || defined(TYPE_CITY_A)
+        // ecumenopolis: a lat/long street grid, noise districts, ridge-noise skyways, and lights that come up at dusk
+        vec2 ll = vec2(atan(n.z, n.x), asin(clamp(n.y, -1.0, 1.0)));
+        vec2 g1 = ll * 64.0, g2 = ll * 256.0;
+        vec2 f1 = abs(fract(g1) - 0.5), f2 = abs(fract(g2) - 0.5);
+        float w1 = fwidth(g1.x) + fwidth(g1.y), w2 = fwidth(g2.x) + fwidth(g2.y);
+        float ave = 1.0 - smoothstep(0.0, 0.05 + w1, min(f1.x, f1.y));
+        float st = 1.0 - smoothstep(0.0, 0.07 + w2, min(f2.x, f2.y));
+        float near1 = 1.0 - smoothstep(0.3, 0.9, w1), near2 = 1.0 - smoothstep(0.25, 0.8, w2);   // grid detail fades with distance
+        float sparkle = step(0.72, fract(sin(dot(floor(g2), vec2(12.9898, 78.233))) * 43758.5453));
+        float dens = smoothstep(0.3, 0.62, snoise(n * 5.0 + uSeed) * 0.5 + 0.5);
+        float blocks = snoise(n * 48.0 + uSeed) * 0.5 + 0.5;
+        // mega-highways: a coarse, gently warped grid between districts
+        vec2 gw = ll * 10.0 + vec2(snoise(n * 2.5 + uSeed), snoise(n * 2.5 - uSeed)) * 0.3;
+        vec2 fw = abs(fract(gw) - 0.5);
+        float ww = fwidth(gw.x) + fwidth(gw.y);
+        float hw = (1.0 - smoothstep(0.0, 0.006 + ww * 0.6, min(fw.x, fw.y))) * smoothstep(0.35, 0.8, dens)
+          * smoothstep(0.45, 0.7, snoise(n * 8.0 + uSeed * 4.0) * 0.5 + 0.5);   // only some runs are lit
+        // night lights: bright downtown cores, dimmer outskirts, skyways as glowing threads
+        float core = smoothstep(0.5, 0.85, snoise(n * 7.0 + uSeed * 2.3) * 0.5 + 0.5);
+        float pattern = mix(ave * 0.9 + st * 0.5 + sparkle * 0.35, 0.22, smoothstep(0.25, 0.8, w2));
+        float lights = pattern * dens * (0.22 + 0.78 * core) + hw * 0.3;
+      #if defined(TYPE_CITY_N)
+        // Noctis: soot-dark arcologies under smog; the neon never quite switches off
+        col = mix(vec3(0.05, 0.045, 0.06), vec3(0.15, 0.13, 0.15), blocks);
+        col = mix(vec3(0.012, 0.014, 0.022), col, dens);
+        col *= 1.0 - (ave * 0.5 * near1 + st * 0.25 * near2) * dens;
+        vec3 lc = mix(vec3(1.6, 0.55, 0.15), vec3(1.6, 0.25, 0.9), smoothstep(0.3, 0.7, snoise(n * 9.0) * 0.5 + 0.5));
+        lc = mix(lc, vec3(0.2, 1.1, 1.6), smoothstep(0.75, 0.9, snoise(n * 13.0 + 4.0) * 0.5 + 0.5));
+        emis = lc * lights * (0.45 + 1.55 * (1.0 - term));
+      #else
+        // Aurelia: ivory and pale-stone districts, gold roofs, park belts, skyways and turquoise reflecting lakes
+        col = mix(vec3(0.2, 0.2, 0.21), vec3(0.4, 0.37, 0.32), blocks);
+        col = mix(col, vec3(0.56, 0.4, 0.15), smoothstep(0.68, 0.84, snoise(n * 90.0 + uSeed) * 0.5 + 0.5) * 0.7);
+        col *= 1.0 - (ave * 0.5 * near1 + st * 0.25 * near2) * (0.4 + 0.6 * dens);
+        col = mix(col, vec3(0.06, 0.17, 0.06), smoothstep(0.6, 0.74, snoise(n * 11.0 + uSeed * 3.0) * 0.5 + 0.5) * 0.85);
+        col = mix(col, vec3(0.55, 0.5, 0.4), hw * 0.6);
+        if (snoise(n * 4.0 + uSeed * 5.0) + snoise(n * 13.0 - uSeed) * 0.25 > 0.62) { col = vec3(0.03, 0.3, 0.38); sea = 1.0; N = S; lights *= 0.1; }
+        gloss = sea > 0.5 ? 1.0 : 0.3;
+        emis = vec3(1.6, 1.22, 0.66) * lights * (0.05 + 1.5 * (1.0 - term));
+      #endif
       #else
         if (h < uSea) {
           float cr = pow(1.0 - abs(snoise(n * 22.0 + uSeed)), 10.0);
@@ -975,7 +1100,6 @@ function makePlanetMaterial(body) {
           col = mix(col, vec3(0.55, 0.22, 0.12), smoothstep(0.7, 0.8, snoise(n * 9.0 - uSeed) * 0.5 + 0.5) * 0.4);
         }
       #endif
-        float term = smoothstep(-0.12, 0.25, dot(S, L));
         float diff = max(dot(N, L), 0.0) * term;
         vec3 lit = col * (diff * 1.3 + 0.012);
         if (gloss > 0.0) {
@@ -1006,7 +1130,7 @@ float ringDensity(float r01){
 function makeGasGiantMaterial(body) {
   return new THREE.ShaderMaterial({
     uniforms: {
-      uSeed: { value: body.seed }, uTime: { value: 0 }, uSunPos: { value: new THREE.Vector3() },
+      uSeed: { value: body.seed }, uTime: { value: 0 }, uSunDir: { value: new THREE.Vector3(1, 0, 0) },
       uAtmo: { value: new THREE.Color().fromArray(body.atmo) }, uRingSeed: { value: body.seed * 0.37 },
       uRingN: { value: new THREE.Vector3(0, 1, 0) }, uCenter: { value: new THREE.Vector3() },
       uRadius: { value: body.radius }, uRingIn: { value: body.ringIn }, uRingOut: { value: body.ringOut }
@@ -1021,7 +1145,7 @@ function makeGasGiantMaterial(body) {
       }`,
     fragmentShader: GLSL_NOISE + GLSL_RING + `
       uniform float uSeed, uTime, uRadius, uRingIn, uRingOut;
-      uniform vec3 uSunPos, uAtmo, uRingN, uCenter;
+      uniform vec3 uSunDir, uAtmo, uRingN, uCenter;
       varying vec3 vObj; varying vec3 vWPos; varying vec3 vSNorm;
       void main(){
         vec3 n = normalize(vObj);
@@ -1043,7 +1167,7 @@ function makeGasGiantMaterial(body) {
         float sw = snoise(r * 16.0 + vec3(uTime * 0.05)) * 0.5 + 0.5;
         float storm = smoothstep(0.2, 0.0, sd + (sw - 0.5) * 0.06);
         col = mix(col, mix(vec3(0.75, 0.18, 0.06), vec3(0.98, 0.72, 0.5), sw), storm * 0.85);
-        vec3 S = normalize(vSNorm), L = normalize(uSunPos - vWPos), V = normalize(cameraPosition - vWPos);
+        vec3 S = normalize(vSNorm), L = normalize(uSunDir), V = normalize(cameraPosition - vWPos);
         float diff = max(dot(S, L), 0.0);
         float shade = 1.0;
         float den = dot(L, uRingN);
@@ -1070,20 +1194,20 @@ function makeRingMaterial(body, tint, opacity) {
     uniforms: {
       uRingSeed: { value: body.seed * 0.37 }, uIn: { value: body.ringIn }, uOut: { value: body.ringOut },
       uTint: { value: new THREE.Color().fromArray(tint) }, uOpacity: { value: opacity },
-      uSunPos: { value: new THREE.Vector3() }, uCenter: { value: new THREE.Vector3() },
+      uSunDir: { value: new THREE.Vector3(1, 0, 0) }, uCenter: { value: new THREE.Vector3() },
       uRadius: { value: body.radius }, uRingN: { value: new THREE.Vector3(0, 1, 0) }
     },
     vertexShader: `
       varying vec3 vLocal; varying vec3 vWPos;
       void main(){ vLocal = position; vec4 wp = modelMatrix * vec4(position, 1.0); vWPos = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: GLSL_RING + `
-      uniform float uIn, uOut, uOpacity, uRadius; uniform vec3 uTint, uSunPos, uCenter, uRingN;
+      uniform float uIn, uOut, uOpacity, uRadius; uniform vec3 uTint, uSunDir, uCenter, uRingN;
       varying vec3 vLocal; varying vec3 vWPos;
       void main(){
         float r = length(vLocal.xy);
         float r01 = (r - uIn) / (uOut - uIn);
         float d = ringDensity(r01) * uOpacity;
-        vec3 L = normalize(uSunPos - vWPos), V = normalize(cameraPosition - vWPos);
+        vec3 L = normalize(uSunDir), V = normalize(cameraPosition - vWPos);
         vec3 oc = uCenter - vWPos;
         float tca = dot(oc, L);
         float d2 = dot(oc, oc) - tca * tca;
@@ -1102,14 +1226,14 @@ function makeCloudMaterial(body) {
     blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
     uniforms: {
       uSeed: { value: body.seed + 13.0 }, uTime: { value: 0 }, uCover: { value: body.cloudCover },
-      uTint: { value: new THREE.Color().fromArray(body.cloudTint) }, uSunPos: { value: new THREE.Vector3() }
+      uTint: { value: new THREE.Color().fromArray(body.cloudTint) }, uSunDir: { value: new THREE.Vector3(1, 0, 0) }
     },
     vertexShader: `
       varying vec3 vObj; varying vec3 vWPos; varying vec3 vSNorm;
       void main(){ vObj = normalize(position); vec4 wp = modelMatrix * vec4(position, 1.0); vWPos = wp.xyz;
         vSNorm = normalize(mat3(modelMatrix) * vObj); gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: GLSL_NOISE + `
-      uniform float uSeed, uTime, uCover; uniform vec3 uTint, uSunPos;
+      uniform float uSeed, uTime, uCover; uniform vec3 uTint, uSunDir;
       varying vec3 vObj; varying vec3 vWPos; varying vec3 vSNorm;
       void main(){
         vec3 n = normalize(vObj);
@@ -1119,7 +1243,7 @@ function makeCloudMaterial(body) {
         float w = fbm(q, 3);
         float c = fbm(q * 1.8 + w * 0.9, 5) * 0.5 + 0.5;
         float a = smoothstep(uCover, uCover + 0.2, c);
-        vec3 S = normalize(vSNorm), L = normalize(uSunPos - vWPos);
+        vec3 S = normalize(vSNorm), L = normalize(uSunDir);
         float diff = smoothstep(-0.12, 0.55, dot(S, L));
         vec3 col = uTint * (diff * 0.95 + 0.008);
         gl_FragColor = vec4(col * a, a * 0.94);
@@ -1135,12 +1259,12 @@ function makeAtmosphereMaterial(body) {
     blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
     uniforms: {
       uCenter: { value: new THREE.Vector3() }, uRp: { value: body.radius }, uRa: { value: body.radius * body.atmoScale },
-      uColor: { value: new THREE.Color().fromArray(body.atmo) }, uSunPos: { value: new THREE.Vector3() },
+      uColor: { value: new THREE.Color().fromArray(body.atmo) }, uSunDir: { value: new THREE.Vector3(1, 0, 0) },
       uDensity: { value: body.atmoDensity }, uFalloff: { value: 3.2 }, uIntensity: { value: 1.0 }
     },
     vertexShader: `varying vec3 vWPos; void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWPos = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: `
-      uniform vec3 uCenter, uColor, uSunPos; uniform float uRp, uRa, uDensity, uFalloff, uIntensity;
+      uniform vec3 uCenter, uColor, uSunDir; uniform float uRp, uRa, uDensity, uFalloff, uIntensity;
       varying vec3 vWPos;
       vec2 rsi(vec3 ro, vec3 rd, vec3 c, float r){
         vec3 oc = ro - c; float b = dot(oc, rd); float cc = dot(oc, oc) - r * r; float h = b * b - cc;
@@ -1156,7 +1280,7 @@ function makeAtmosphereMaterial(body) {
         float hit = tp.x > 0.0 ? 1.0 : 0.0;
         if (hit > 0.5) t1 = min(t1, tp.x);
         float len = max(t1 - t0, 0.0);
-        vec3 Ls = normalize(uSunPos - uCenter);
+        vec3 Ls = normalize(uSunDir);
         float H = uRa - uRp, sum = 0.0, lsum = 0.0;
         for (int i = 0; i < 8; i++) {
           float t = t0 + (float(i) + 0.5) / 8.0 * len;
@@ -1505,6 +1629,7 @@ class ParticlePool {
     this.geo.setDrawRange(0, this.n);
     this.aPos.needsUpdate = true; this.aCol.needsUpdate = true; this.aSize.needsUpdate = true; this.aAlpha.needsUpdate = true;
   }
+  shift(v) { for (let i = 0; i < this.n; i++) { this.pos[i * 3] -= v.x; this.pos[i * 3 + 1] -= v.y; this.pos[i * 3 + 2] -= v.z; } }
   dispose() { this.geo.dispose(); this.mat.dispose(); }
 }
 
@@ -1558,26 +1683,53 @@ function disposeTree(root) {
 /* =====================================================================
    STAR SYSTEM DATA
    ===================================================================== */
-const SUN_RADIUS = 240;
+const SUN_RADIUS = 8000;
+const PULSE_SPEED = 7000;   // u/s cruise on the pulse drive; normal thrust tops out at 240 (780 boosted)
+/* The Halcyon Expanse: ~40x the original system. Neighbouring worlds sit ~20-30 s apart on the
+   pulse drive and many minutes apart on thrusters. Orbits are slow, so the map stays readable. */
 const BODIES = [
-  { id: 'eden', name: 'Eden Thalos', klass: 'Paradise World', type: 'lush', radius: 180, orbit: 1500, period: 2600, phase: 0.9, incl: 0.05,
-    tilt: 0.38, spin: 0.011, seed: 3.7, amp: 0.05, sea: 0.03, freq: 1.55,
+  { id: 'sahri', name: 'Sahri', klass: 'Desert World', type: 'desert', radius: 1500, orbit: 110000, period: 40000, phase: 0.2, incl: 0.02,
+    tilt: 0.12, spin: 0.004, seed: 31.4, amp: 0.05, sea: -1, freq: 1.7, res: 'solanium',
+    atmo: [1.1, 0.7, 0.35], atmoScale: 1.14, atmoDensity: 0.55, cloudCover: 0.82, cloudTint: [1.0, 0.92, 0.8], landable: true },
+  { id: 'eden', name: 'Eden Thalos', klass: 'Paradise World', type: 'lush', radius: 1800, orbit: 205000, period: 52000, phase: 0.62, incl: 0.05,
+    tilt: 0.38, spin: 0.011, seed: 3.7, amp: 0.05, sea: 0.03, freq: 1.55, res: 'viridium',
     atmo: [0.18, 0.45, 1.05], atmoScale: 1.17, atmoDensity: 0.7, cloudCover: 0.6, cloudTint: [1.0, 1.0, 1.0], landable: true },
-  { id: 'vharun', name: 'Vharun', klass: 'Toxic Wasteland', type: 'toxic', radius: 135, orbit: 2350, period: 3900, phase: 2.7, incl: -0.04,
-    tilt: 0.21, spin: 0.008, seed: 11.2, amp: 0.085, sea: 0.02, freq: 1.9,
+  { id: 'aurelia', name: 'Aurelia', klass: 'Core World · Capital', type: 'cityA', radius: 2300, orbit: 290000, period: 61000, phase: 0.95, incl: 0.01,
+    tilt: 0.18, spin: 0.003, seed: 44.1, amp: 0.004, sea: -1, freq: 1.2, city: true,
+    atmo: [0.45, 0.6, 1.2], atmoScale: 1.12, atmoDensity: 0.5, cloudCover: 0.74, cloudTint: [1.0, 0.98, 0.94], landable: true },
+  { id: 'thalassa', name: 'Thalassa', klass: 'Ocean World', type: 'ocean', radius: 2000, orbit: 380000, period: 70000, phase: 1.22, incl: -0.03,
+    tilt: 0.3, spin: 0.006, seed: 57.2, amp: 0.045, sea: 0.32, freq: 1.4, res: 'coralite',
+    atmo: [0.2, 0.55, 1.15], atmoScale: 1.16, atmoDensity: 0.7, cloudCover: 0.55, cloudTint: [1.0, 1.0, 1.0], landable: true },
+  { id: 'vharun', name: 'Vharun', klass: 'Toxic Wasteland', type: 'toxic', radius: 1350, orbit: 470000, period: 80000, phase: 1.44, incl: -0.04,
+    tilt: 0.21, spin: 0.008, seed: 11.2, amp: 0.085, sea: 0.02, freq: 1.9, res: 'sulphurine',
     atmo: [1.2, 0.26, 0.1], atmoScale: 1.15, atmoDensity: 0.6, cloudCover: 0, landable: true },
-  { id: 'okara', name: 'Okara Major', klass: 'Ringed Gas Giant', type: 'giant', radius: 380, orbit: 3350, period: 6400, phase: 4.3, incl: 0.03,
+  { id: 'noctis', name: 'Noctis', klass: 'Core World · Undercity', type: 'cityN', radius: 2700, orbit: 560000, period: 90000, phase: 1.64, incl: 0.02,
+    tilt: 0.22, spin: 0.0025, seed: 66.6, amp: 0.004, sea: -1, freq: 1.2, city: true, lawless: true,
+    atmo: [0.5, 0.24, 0.5], atmoScale: 1.12, atmoDensity: 0.55, cloudCover: 0.6, cloudTint: [0.3, 0.26, 0.3], landable: true },
+  { id: 'umbra', name: 'Umbra', klass: 'Twilight Jungle', type: 'biolum', radius: 1600, orbit: 650000, period: 100000, phase: 1.84, incl: -0.02,
+    tilt: 0.4, spin: 0.005, seed: 72.9, amp: 0.05, sea: 0.0, freq: 1.6, res: 'lumenite',
+    atmo: [0.35, 0.2, 0.9], atmoScale: 1.15, atmoDensity: 0.6, cloudCover: 0.7, cloudTint: [0.5, 0.45, 0.8], landable: true },
+  { id: 'okara', name: 'Okara Major', klass: 'Ringed Gas Giant', type: 'giant', radius: 3800, orbit: 760000, period: 120000, phase: 2.02, incl: 0.03,
     tilt: 0.42, tiltX: 0.5, spin: 0.004, seed: 5.3, atmo: [0.62, 0.42, 1.1], atmoScale: 1.08, atmoDensity: 0.55, ringIn: 1.35, ringOut: 2.55, landable: false },
-  { id: 'kryo', name: 'Kryo-7', klass: 'Frozen Moon', type: 'ice', parent: 'okara', radius: 72, orbit: 1080, period: 1100, phase: 1.1, incl: 0.16,
-    tilt: 0.1, spin: 0.02, seed: 21.9, amp: 0.05, sea: -0.12, freq: 2.2,
-    atmo: [0.45, 0.8, 1.2], atmoScale: 1.16, atmoDensity: 0.45, cloudCover: 0.64, cloudTint: [0.88, 0.95, 1.0], landable: true }
+  { id: 'kryo', name: 'Kryo-7', klass: 'Frozen Moon', type: 'ice', parent: 'okara', radius: 720, orbit: 24000, period: 3000, phase: 1.1, incl: 0.16,
+    tilt: 0.1, spin: 0.02, seed: 21.9, amp: 0.05, sea: -0.12, freq: 2.2, res: 'cryonite',
+    atmo: [0.45, 0.8, 1.2], atmoScale: 1.16, atmoDensity: 0.45, cloudCover: 0.64, cloudTint: [0.88, 0.95, 1.0], landable: true },
+  { id: 'crysalis', name: 'Crysalis', klass: 'Prismatic Anomaly', type: 'prism', radius: 1400, orbit: 880000, period: 140000, phase: 2.2, incl: 0.05,
+    tilt: 0.6, spin: 0.007, seed: 88.3, amp: 0.07, sea: -1, freq: 1.9, res: 'prismite',
+    atmo: [0.7, 0.45, 1.0], atmoScale: 1.12, atmoDensity: 0.28, cloudCover: 0.8, cloudTint: [1.0, 0.85, 1.05], landable: true }
 ];
 const BODY = Object.fromEntries(BODIES.map((b) => [b.id, b]));
-// Outer boundary, derived from the furthest any body (plus rings or approach zone) can get from
-// the sun, so no world ever orbits inside the warning band. Currently 5,050 u warn / 5,950 u edge.
+/* Asteroid fields, anchored to a body and drifting with its orbit */
+const FIELDS = [
+  { id: 'verdant', name: 'Verdant Drift', near: 'eden', offset: [26000, 1500, -14000], radius: 7000, count: 260, seed: 4242 },
+  { id: 'kessler', name: 'Kessler Reach', near: 'noctis', offset: [-30000, -2500, 22000], radius: 9000, count: 320, seed: 5151 },
+  { id: 'shoals', name: 'Okara Shoals', near: 'okara', offset: [38000, 3000, 26000], radius: 8000, count: 280, seed: 6161 }
+];
+// Outer boundary, derived from the furthest any body (plus rings or approach zone) can get from the
+// sun, with room for the pulse drive to drop out before the warning band (~944k warn / ~974k edge).
 const SYSTEM_REACH = Math.max(...BODIES.map((b) => b.orbit * Math.hypot(1, b.incl)
   + (b.parent ? BODY[b.parent].orbit * Math.hypot(1, BODY[b.parent].incl) : 0) + b.radius * (b.ringOut || 2)));
-const BOUNDARY_WARN = Math.ceil((SYSTEM_REACH + 450) / 50) * 50, BOUNDARY = BOUNDARY_WARN + 900;
+const BOUNDARY_WARN = Math.ceil((SYSTEM_REACH + 60000) / 1000) * 1000, BOUNDARY = BOUNDARY_WARN + 30000;
 
 function bodyPosition(body, t, out) {
   const a = body.phase + (t / body.period) * TAU;
@@ -1591,21 +1743,21 @@ function bodyPosition(body, t, out) {
 
 /* Shared world progress (persists across scene rebuilds) */
 const World = {
-  time: 420, fuel: 100, carbon: 0, discovered: new Set(), targetIdx: -1, lastBody: 'eden',
+  time: 420, fuel: 100, carbon: 0, discovered: new Set(), navTarget: 'eden', lastBody: 'eden',
   glyphs: new Set(), surveyed: new Set(), surveyDone: false,
   stats: { mined: 0, asteroids: 0 }
 };
 
-/* Halcyon Survey, the voyage's goal: land on every world, decode each world's Ancient Waystone,
+/* Halcyon Survey, the voyage's goal: land on every wild world, decode each world's Ancient Waystone,
    and survey the gas giant from close orbit */
-const GLYPH_WORDS = { eden: ['ASHRA', 'growth'], vharun: ['KHEL', 'ember'], kryo: ['VOSS', 'silence'] };
+const GLYPH_WORDS = { eden: ['ASHRA', 'growth'], vharun: ['KHEL', 'ember'], kryo: ['VOSS', 'silence'], sahri: ['SURA', 'heat'],
+  thalassa: ['MAREN', 'tide'], umbra: ['NYR', 'shadow'], crysalis: ['IVRA', 'light'] };
+const WILD = BODIES.filter((b) => b.landable && !b.city).sort((a, b) => (a.id === 'eden' ? -1 : 0) - (b.id === 'eden' ? -1 : 0));
 const SURVEY = [
-  { label: 'Land on Eden Thalos', done: () => World.discovered.has('eden') },
-  { label: 'Decode the Eden Thalos waystone', done: () => World.glyphs.has('eden') },
-  { label: 'Land on Vharun', done: () => World.discovered.has('vharun') },
-  { label: 'Decode the Vharun waystone', done: () => World.glyphs.has('vharun') },
-  { label: 'Land on Kryo-7', done: () => World.discovered.has('kryo') },
-  { label: 'Decode the Kryo-7 waystone', done: () => World.glyphs.has('kryo') },
+  ...WILD.flatMap((b) => [
+    { label: 'Land on ' + b.name, done: () => World.discovered.has(b.id) },
+    { label: 'Decode the ' + b.name + ' waystone', done: () => World.glyphs.has(b.id) }
+  ]),
   { label: 'Survey Okara Major from close orbit', done: () => World.surveyed.has('okara') }
 ];
 const surveyCount = () => SURVEY.filter((o) => o.done()).length;
@@ -1625,6 +1777,7 @@ const Save = {
       ids(d.glyphs).forEach((id) => World.glyphs.add(id));
       ids(d.surveyed).forEach((id) => World.surveyed.add(id));
       World.surveyDone = d.surveyDone === true && surveyCount() === SURVEY.length;   // trust only if the objectives agree (VW-011)
+      if (BODIES.some((bd) => bd.id === d.navTarget)) World.navTarget = d.navTarget;
       if (d.stats) { World.stats.mined = d.stats.mined | 0; World.stats.asteroids = d.stats.asteroids | 0; }
       return true;
     } catch (e) { return false; }
@@ -1632,7 +1785,7 @@ const Save = {
   write() {
     try {
       localStorage.setItem(this.KEY, JSON.stringify({
-        v: 1, carbon: World.carbon, fuel: Math.round(World.fuel * 10) / 10, surveyDone: World.surveyDone, stats: World.stats,
+        v: 1, carbon: World.carbon, fuel: Math.round(World.fuel * 10) / 10, surveyDone: World.surveyDone, stats: World.stats, navTarget: World.navTarget,
         discovered: [...World.discovered], glyphs: [...World.glyphs], surveyed: [...World.surveyed]
       }));
     } catch (e) { /* storage unavailable: progress just isn't kept */ }
@@ -1640,7 +1793,7 @@ const Save = {
   clear() { try { localStorage.removeItem(this.KEY); } catch (e) { /* storage unavailable */ } }
 };
 function resetVoyage() {
-  Object.assign(World, { fuel: 100, carbon: 0, surveyDone: false, targetIdx: -1 });
+  Object.assign(World, { fuel: 100, carbon: 0, surveyDone: false, navTarget: 'eden', lastBody: 'eden' });
   World.discovered.clear(); World.glyphs.clear(); World.surveyed.clear();
   World.stats.mined = 0; World.stats.asteroids = 0;
   Save.clear();
@@ -2099,8 +2252,10 @@ function asteroidGeo(seed) {
 /* =====================================================================
    ASTEROID BELT — instanced, tumbling, mineable from the cockpit
    ===================================================================== */
-function buildAsteroidBelt(env, seed) {
-  const COUNT = 340, R0 = 1930, SPREAD = 140, THICK = 60;
+/* An asteroid field: a flattened cloud of rocks in field-local coordinates. The caller places
+   `mesh` at the field's centre and passes field-local rays to raycast(). */
+function buildAsteroidField(env, field) {
+  const COUNT = field.count, RAD = field.radius, seed = field.seed;
   const rnd = mulberry32(seed);
   const geo = asteroidGeo(seed);
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.92, metalness: 0.08, envMap: env, envMapIntensity: 0.5, flatShading: true });
@@ -2118,9 +2273,9 @@ function buildAsteroidBelt(env, seed) {
     mesh.setColorAt(i, col);
   }
   function respawnRock(r, rr) {
-    const a = rr() * TAU, rad = R0 + (rr() - 0.5) * 2 * SPREAD * Math.sqrt(rr());
-    r.pos.set(Math.cos(a) * rad, (rr() - 0.5) * 2 * THICK * rr(), Math.sin(a) * rad);
-    r.size = rr() < 0.08 ? 16 + rr() * 16 : 3 + Math.pow(rr(), 2) * 11;
+    const a = rr() * TAU, rad = RAD * Math.sqrt(rr());
+    r.pos.set(Math.cos(a) * rad, (rr() - 0.5) * RAD * 0.35 * rr(), Math.sin(a) * rad);
+    r.size = rr() < 0.06 ? 70 + rr() * 90 : 8 + Math.pow(rr(), 2) * 40;
     r.scale.set(r.size * (0.8 + rr() * 0.4), r.size * (0.7 + rr() * 0.4), r.size * (0.8 + rr() * 0.5));
     r.maxHp = r.hp = 30 + r.size * 6;
     r.alive = true; r.dying = 0;
@@ -2180,84 +2335,98 @@ function ensureAssets() {
   sharedTextures.add(Assets.glowTex);
 }
 
+/* Celestial bodies are drawn in "scaled space": beyond SCALE_D0 a body is pulled toward the camera
+   along its true direction and shrunk by the same factor, so its on-screen size and direction are
+   exact while depth stays in a precise range. A floating origin keeps the ship near (0,0,0), so
+   everything near the camera keeps full float precision however far you travel. */
+const SCALE_D0 = 40000, SCALE_K = 0.03;
+const scaledDist = (d) => (d <= SCALE_D0 ? d : SCALE_D0 + (d - SCALE_D0) * SCALE_K);
+
 function createSpace(opts) {
   ensureAssets();
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerHeight, 0.5, 40000);
-  const sunPos = new THREE.Vector3(0, 0, 0);
+  const camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerHeight, 2, 260000);
   const env = Assets.envSpace;
+  const origin = new THREE.Vector3();          // true-space position of the render-space origin
 
   scene.add(makeSpaceSky(Assets.nebula.texture));
   const stars = makeStarfield(2000, 991);
   scene.add(stars);
 
-  /* sun */
+  /* sun: sits at the true-space origin, drawn in scaled space */
+  const sunHolder = new THREE.Group();
+  scene.add(sunHolder);
   const sunMat = makeSunMaterial();
-  const sun = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), sunMat);
-  sun.scale.setScalar(SUN_RADIUS);
-  scene.add(sun);
+  const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), sunMat);
+  sunMesh.scale.setScalar(SUN_RADIUS);
   const corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: Assets.glowTex, color: new THREE.Color(2.2, 1.15, 0.5), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
   corona.scale.setScalar(SUN_RADIUS * 5.5);
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: Assets.glowTex, color: new THREE.Color(0.32, 0.1, 0.2), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
   halo.scale.setScalar(SUN_RADIUS * 12);
-  scene.add(corona, halo);
-  scene.add(new THREE.PointLight(0xfff1dc, 1.7, 0, 0));
+  sunHolder.add(sunMesh, corona, halo);
+  // at these distances the sun is effectively directional; the light follows the ship
+  const sunLight = new THREE.DirectionalLight(0xfff1dc, 1.7);
+  scene.add(sunLight, sunLight.target);
   scene.add(new THREE.HemisphereLight(lin(0x6b4fd8), lin(0x08303f), 0.35));
   scene.add(new THREE.AmbientLight(0xffffff, 0.04));
 
-  /* planets */
+  /* planets, with three detail levels picked by distance */
   const hiSphere = new THREE.SphereGeometry(1, 320, 160);
-  const loSphere = new THREE.SphereGeometry(1, 96, 48);
+  const midSphere = new THREE.SphereGeometry(1, 128, 64);
+  const loSphere = new THREE.SphereGeometry(1, 64, 32);
+  const shellSphere = new THREE.SphereGeometry(1, 96, 48);
   const bodies = BODIES.map((b) => {
     const holder = new THREE.Group(), tiltNode = new THREE.Group(), spinNode = new THREE.Group();
     tiltNode.rotation.set(b.tiltX || 0, 0, b.tilt);
     holder.add(tiltNode); tiltNode.add(spinNode); scene.add(holder);
-    const surfMat = b.type === 'giant' ? makeGasGiantMaterial(b) : makePlanetMaterial(b);
-    surfMat.uniforms.uSunPos.value.copy(sunPos);
-    const surf = new THREE.Mesh(b.type === 'giant' ? loSphere : hiSphere, surfMat);
+    const giant = b.type === 'giant';
+    const surf = new THREE.Mesh(giant ? midSphere : loSphere, giant ? makeGasGiantMaterial(b) : makePlanetMaterial(b));
     surf.scale.setScalar(b.radius);
     spinNode.add(surf);
     let clouds = null;
     if (b.cloudCover > 0) {
-      clouds = new THREE.Mesh(loSphere, makeCloudMaterial(b));
-      clouds.scale.setScalar(b.radius * 1.024);
+      clouds = new THREE.Mesh(shellSphere, makeCloudMaterial(b));
+      clouds.scale.setScalar(b.radius * (1 + Math.max(0.012, b.amp || 0) * 0.6));
       clouds.renderOrder = 1;
-      clouds.material.uniforms.uSunPos.value.copy(sunPos);
       tiltNode.add(clouds);
     }
-    const atmo = new THREE.Mesh(loSphere, makeAtmosphereMaterial(b));
+    const atmo = new THREE.Mesh(shellSphere, makeAtmosphereMaterial(b));
     atmo.scale.setScalar(b.radius * b.atmoScale);
     atmo.renderOrder = 2;
-    atmo.material.uniforms.uSunPos.value.copy(sunPos);
     holder.add(atmo);
     const rings = [];
     if (b.ringIn) {
       const rg = new THREE.Group();
       rg.rotation.x = -Math.PI / 2;
       tiltNode.add(rg);
-      const bands = [[1.35, 1.72, [0.9, 0.72, 0.58], 0.9], [1.74, 2.06, [0.82, 0.62, 0.7], 1.0], [2.09, 2.4, [0.66, 0.6, 0.86], 0.85], [2.43, 2.55, [0.9, 0.8, 0.75], 0.6]];
-      bands.forEach(([a, c, tint, op]) => {
-        const m = new THREE.Mesh(new THREE.RingGeometry(a, c, 220, 1), makeRingMaterial(b, tint, op));
-        m.scale.setScalar(b.radius);
-        m.renderOrder = 3;
-        m.material.uniforms.uSunPos.value.copy(sunPos);
-        rg.add(m); rings.push(m);
-      });
+      [[1.35, 1.72, [0.9, 0.72, 0.58], 0.9], [1.74, 2.06, [0.82, 0.62, 0.7], 1.0], [2.09, 2.4, [0.66, 0.6, 0.86], 0.85], [2.43, 2.55, [0.9, 0.8, 0.75], 0.6]]
+        .forEach(([a, c, tint, op]) => {
+          const m = new THREE.Mesh(new THREE.RingGeometry(a, c, 220, 1), makeRingMaterial(b, tint, op));
+          m.scale.setScalar(b.radius);
+          m.renderOrder = 3;
+          rg.add(m); rings.push(m);
+        });
     }
-    return { b, holder, tiltNode, spinNode, surf, clouds, atmo, rings, pos: holder.position };
+    // truePos: from the sun · pos: render space, unscaled (physics) · holder: scaled-space placement
+    return { b, holder, tiltNode, spinNode, surf, clouds, atmo, rings, truePos: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 0, k: 1 };
   });
   const bodyById = Object.fromEntries(bodies.map((o) => [o.b.id, o]));
 
-  const belt = buildAsteroidBelt(env, 4242);
-  scene.add(belt.mesh);
+  /* asteroid fields, anchored to a body */
+  const fields = FIELDS.map((f) => {
+    const af = buildAsteroidField(env, f);
+    scene.add(af.mesh);
+    return { f, af, center: new THREE.Vector3() };
+  });
 
   /* ship */
   const shipModel = buildShipModel(env);
   scene.add(shipModel.group);
   const ship = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), quat: new THREE.Quaternion(), ang: new THREE.Vector3(),
     stick: new THREE.Vector2(), throttle: 0, boost: 0, wasBoost: false, shake: 0 };
+  const pulse = { state: 'off', t: 0, speed: 0 };
 
-  /* space dust streaks */
+  /* space dust streaks; at pulse speeds they move at a capped "visual" speed so they never strobe */
   const DUST = 280, DBOX = 170;
   const dustBase = new Float32Array(DUST * 3);
   for (let i = 0; i < DUST * 3; i++) dustBase[i] = Math.random() * DBOX;
@@ -2268,6 +2437,7 @@ function createSpace(opts) {
   const dust = new THREE.LineSegments(dustGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   dust.frustumCulled = false;
   scene.add(dust);
+  const dustVirt = new THREE.Vector3();
 
   const beams = [makeBeam([7.5, 0.35, 0.4]), makeBeam([7.5, 0.35, 0.4])];
   beams.forEach((bm) => scene.add(bm));
@@ -2276,7 +2446,8 @@ function createSpace(opts) {
 
   /* working vectors */
   const V = { a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), fwd: new THREE.Vector3(), up: new THREE.Vector3(),
-    right: new THREE.Vector3(), q: new THREE.Quaternion(), e: new THREE.Euler(), m: new THREE.Matrix4(), aim: new THREE.Vector3() };
+    right: new THREE.Vector3(), q: new THREE.Quaternion(), e: new THREE.Euler(), m: new THREE.Matrix4(), aim: new THREE.Vector3(),
+    camTrue: new THREE.Vector3(), rel: new THREE.Vector3() };
   const camQ = new THREE.Quaternion();
   const camOff = new THREE.Vector3();
   const pitchDown = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.055);
@@ -2284,32 +2455,71 @@ function createSpace(opts) {
   let introT = 0, blendT = 1, autoBody = null, impactCool = 0;
   const blendFrom = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
 
-  function updateBodies(t) {
+  /* true positions for bodies and fields, and their unscaled render-space positions for physics */
+  function computePositions(t) {
+    for (const o of bodies) { bodyPosition(o.b, t, o.truePos); o.pos.copy(o.truePos).sub(origin); }
+    for (const fd of fields) fd.center.copy(bodyById[fd.f.near].pos).add(V.a.fromArray(fd.f.offset));
+  }
+  /* move the render-space origin to the ship once it strays, so nearby geometry keeps full precision */
+  function rebase() {
+    if (ship.pos.lengthSq() < 4000 * 4000) return;
+    const d = V.a.copy(ship.pos);
+    origin.add(d);
+    camera.position.sub(d);
+    sparks.shift(d);
+    ship.pos.set(0, 0, 0);
+    computePositions(World.time);
+  }
+  /* scaled-space placement and per-frame uniforms; runs after the camera has its final pose */
+  function placeBodies(t) {
+    V.camTrue.copy(origin).add(camera.position);
+    // sun
+    V.rel.copy(V.camTrue).negate();
+    const ds = V.rel.length(), ks = scaledDist(ds) / Math.max(ds, 1e-6);
+    sunHolder.position.copy(camera.position).addScaledVector(V.rel, ks);
+    sunHolder.scale.setScalar(ks);
     for (const o of bodies) {
-      bodyPosition(o.b, t, o.holder.position);
-      o.spinNode.rotation.y = t * o.b.spin;
+      const b = o.b;
+      V.rel.copy(o.truePos).sub(V.camTrue);
+      const d = V.rel.length(), k = scaledDist(d) / Math.max(d, 1e-6);
+      o.dist = d; o.k = k;
+      o.holder.position.copy(camera.position).addScaledVector(V.rel, k);
+      o.holder.scale.setScalar(k);
+      if (b.type !== 'giant') o.surf.geometry = d < b.radius * 8 ? hiSphere : d < b.radius * 60 ? midSphere : loSphere;
+      o.spinNode.rotation.y = t * b.spin;
+      const sunDir = V.a.copy(o.truePos).negate().normalize();
       const u = o.surf.material.uniforms;
       u.uTime.value = t;
-      if (u.uCenter) { u.uCenter.value.copy(o.holder.position); }
-      if (o.clouds) o.clouds.material.uniforms.uTime.value = t;
-      o.atmo.material.uniforms.uCenter.value.copy(o.holder.position);
-      const inside = camera.position.distanceTo(o.holder.position) < o.b.radius * o.b.atmoScale * 1.02;
+      u.uSunDir.value.copy(sunDir);
+      if (u.uCenter) u.uCenter.value.copy(o.holder.position);
+      if (u.uRadius) u.uRadius.value = b.radius * k;
+      if (o.clouds) { o.clouds.material.uniforms.uTime.value = t; o.clouds.material.uniforms.uSunDir.value.copy(sunDir); }
+      const au = o.atmo.material.uniforms;
+      au.uCenter.value.copy(o.holder.position); au.uSunDir.value.copy(sunDir);
+      au.uRp.value = b.radius * k; au.uRa.value = b.radius * b.atmoScale * k;
+      const inside = d < b.radius * b.atmoScale * 1.02;
       o.atmo.material.side = inside ? THREE.BackSide : THREE.FrontSide;
       o.atmo.material.depthTest = !inside;
       if (o.rings.length) {
         o.tiltNode.updateMatrixWorld(true);
         V.up.set(0, 1, 0).applyQuaternion(o.tiltNode.getWorldQuaternion(V.q));
         u.uRingN.value.copy(V.up);
-        o.rings.forEach((r) => { r.material.uniforms.uCenter.value.copy(o.holder.position); r.material.uniforms.uRingN.value.copy(V.up); });
+        o.rings.forEach((r) => {
+          const ru = r.material.uniforms;
+          ru.uCenter.value.copy(o.holder.position); ru.uRingN.value.copy(V.up); ru.uSunDir.value.copy(sunDir); ru.uRadius.value = b.radius * k;
+        });
       }
     }
+    for (const fd of fields) fd.af.mesh.position.copy(fd.center);
   }
 
   /* spawn: near Eden on its day side, nose pointed at the planet */
   function placeAtStart() {
-    updateBodies(World.time);
+    computePositions(World.time);
     const eden = bodyById.eden;
-    const toSun = V.a.copy(sunPos).sub(eden.pos).normalize();
+    origin.copy(eden.truePos);
+    computePositions(World.time);
+    const toSun = V.a.copy(eden.truePos).negate().normalize();
     const side = V.b.set(0, 1, 0).cross(toSun).normalize();
     ship.pos.copy(eden.pos).addScaledVector(toSun, eden.b.radius * 2.5).addScaledVector(side, eden.b.radius * 1.6).add(V.c.set(0, eden.b.radius * 0.45, 0));
     V.m.lookAt(ship.pos, eden.pos, V.c.set(0, 1, 0));
@@ -2318,9 +2528,11 @@ function createSpace(opts) {
   }
   /* launch from a surface: above the day side, flying tangentially with the planet below */
   function placeLaunch(id) {
-    updateBodies(World.time);
+    computePositions(World.time);
     const o = bodyById[id];
-    const dirOut = V.a.copy(sunPos).sub(o.pos).normalize().applyAxisAngle(V.b.set(0, 1, 0), 0.9);
+    origin.copy(o.truePos);
+    computePositions(World.time);
+    const dirOut = V.a.copy(o.truePos).negate().normalize().applyAxisAngle(V.b.set(0, 1, 0), 0.9);
     dirOut.y += 0.25; dirOut.normalize();
     const tangent = V.c.set(0, 1, 0).cross(dirOut).normalize();
     ship.pos.copy(o.pos).addScaledVector(dirOut, o.b.radius * 1.32);
@@ -2342,7 +2554,7 @@ function createSpace(opts) {
     blendFrom.pos.copy(camera.position).sub(ship.pos).applyQuaternion(V.q.copy(ship.quat).invert());
     blendFrom.quat.copy(camera.quaternion);
   }
-  function startAutopilot(id) { mode = 'autopilot'; autoBody = bodyById[id]; }
+  function startAutopilot(id) { mode = 'autopilot'; autoBody = bodyById[id]; pulse.state = 'off'; }
 
   function nearestBody() {
     let best = null, bestD = Infinity;
@@ -2351,6 +2563,33 @@ function createSpace(opts) {
       if (d < bestD) { bestD = d; best = o; }
     }
     return { o: best, surf: bestD };
+  }
+
+  /* ---------------- pulse drive ---------------- */
+  function pulseBlocker() {
+    for (const o of bodies) {
+      if (ship.pos.distanceTo(o.pos) - o.b.radius < o.b.radius * 1.2 + 600) return o.b;
+    }
+    return null;
+  }
+  // returns a message for the HUD, or '' when nothing needs saying
+  function togglePulse() {
+    if (mode !== 'flight') return '';
+    if (pulse.state !== 'off') { dropPulse(null); return 'Pulse drive disengaged'; }
+    if (World.fuel < 1) { Sound.deny(); return 'Not enough fuel for the pulse drive'; }
+    const near = pulseBlocker();
+    if (near) { Sound.deny(); return 'Too close to ' + near.name + ' to engage the pulse drive'; }
+    pulse.state = 'spool'; pulse.t = 0;
+    Sound.pulseCharge();
+    return 'Pulse drive charging';
+  }
+  let pulseNote = '';
+  function dropPulse(reason) {
+    if (pulse.state === 'off') return;
+    const was = pulse.state;
+    pulse.state = 'off';
+    if (was === 'on') { ship.vel.setLength(Math.min(pulse.speed, 900)); Sound.whoosh(1.4, false); ship.shake = Math.max(ship.shake, 0.8); }
+    pulseNote = reason || '';
   }
 
   function collide(dt, tel) {
@@ -2368,26 +2607,34 @@ function createSpace(opts) {
         if (impactCool <= 0 && vn < -20) { tel.impact = o.b.type === 'giant' ? 'Atmospheric pressure — pulling up' : 'Hull impact'; Sound.thud(); ship.shake = 1; impactCool = 1; }
       }
     }
-    const ds = ship.pos.length();
+    // the sun, at the true-space origin
+    V.b.copy(origin).add(ship.pos);
+    const ds = V.b.length();
     tel.heat = ds < SUN_RADIUS * 2.0;
-    if (ds < SUN_RADIUS + 40) {
-      V.a.copy(ship.pos).normalize();
-      ship.pos.copy(V.a).multiplyScalar(SUN_RADIUS + 40);
+    if (ds < SUN_RADIUS + 400) {
+      V.a.copy(V.b).normalize();
+      ship.pos.addScaledVector(V.a, SUN_RADIUS + 400 - ds);
       const vn = ship.vel.dot(V.a);
       if (vn < 0) ship.vel.addScaledVector(V.a, -vn * 1.5);
     }
-    for (const r of belt.rocks) {
-      if (!r.alive || r.dying > 0) continue;
-      const rad = r.size * 0.95 + 3.5;
-      V.a.subVectors(ship.pos, r.pos);
-      const d2 = V.a.lengthSq();
-      if (d2 < rad * rad) {
-        const d = Math.sqrt(d2) || 1;
-        V.a.multiplyScalar(1 / d);
-        ship.pos.copy(r.pos).addScaledVector(V.a, rad);
-        const vn = ship.vel.dot(V.a);
-        if (vn < 0) ship.vel.addScaledVector(V.a, -vn * 1.4);
-        if (impactCool <= 0 && vn < -15) { tel.impact = 'Asteroid collision'; Sound.thud(); ship.shake = 0.8; impactCool = 0.8; }
+    for (const fd of fields) {
+      V.c.subVectors(ship.pos, fd.center);
+      if (V.c.lengthSq() > (fd.f.radius + 200) ** 2) continue;
+      for (const r of fd.af.rocks) {
+        if (!r.alive || r.dying > 0) continue;
+        const rad = r.size * 0.95 + 3.5;
+        V.a.subVectors(V.c, r.pos);
+        const d2 = V.a.lengthSq();
+        if (d2 < rad * rad) {
+          const d = Math.sqrt(d2) || 1;
+          V.a.multiplyScalar(1 / d);
+          ship.pos.copy(fd.center).add(r.pos).addScaledVector(V.a, rad);
+          V.c.subVectors(ship.pos, fd.center);
+          const vn = ship.vel.dot(V.a);
+          if (vn < 0) ship.vel.addScaledVector(V.a, -vn * 1.4);
+          if (pulse.state !== 'off') dropPulse('Asteroid impact');
+          if (impactCool <= 0 && vn < -15) { tel.impact = 'Asteroid collision'; Sound.thud(); ship.shake = 0.8; impactCool = 0.8; }
+        }
       }
     }
   }
@@ -2397,9 +2644,21 @@ function createSpace(opts) {
     const m = ctrl ? Input.take() : { dx: 0, dy: 0 };
     ship.stick.x += m.dx * 0.0042; ship.stick.y += m.dy * 0.0042;
     if (ship.stick.length() > 1) ship.stick.normalize();
+    // Q: align with the navigation target
+    const nav = bodyById[World.navTarget];
+    tel.aligning = false;
+    if (ctrl && nav && k.down('KeyQ')) {
+      V.m.lookAt(ship.pos, nav.pos, V.up.set(0, 1, 0).applyQuaternion(ship.quat));
+      V.q.setFromRotationMatrix(V.m);
+      ship.quat.slerp(V.q, 1 - Math.exp(-2.4 * dt));
+      ship.stick.multiplyScalar(Math.exp(-8 * dt));
+      ship.ang.multiplyScalar(Math.exp(-8 * dt));
+      tel.aligning = true;
+    }
+    const steer = pulse.state === 'on' ? 0.35 : 1;
     const dz = (v) => (Math.abs(v) < 0.06 ? 0 : (v - Math.sign(v) * 0.06) / 0.94);
     const roll = ctrl ? (k.down('KeyA') ? 1 : 0) - (k.down('KeyD') ? 1 : 0) : 0;
-    const tp = -dz(ship.stick.y) * 1.25, ty = -dz(ship.stick.x) * 0.95, tr = roll * 2.2 - dz(ship.stick.x) * 0.35;
+    const tp = -dz(ship.stick.y) * 1.25 * steer, ty = -dz(ship.stick.x) * 0.95 * steer, tr = (roll * 2.2 - dz(ship.stick.x) * 0.35) * steer;
     ship.ang.x = damp(ship.ang.x, tp, 5, dt); ship.ang.y = damp(ship.ang.y, ty, 5, dt); ship.ang.z = damp(ship.ang.z, tr, 5, dt);
     V.e.set(ship.ang.x * dt, ship.ang.y * dt, ship.ang.z * dt, 'XYZ');
     ship.quat.multiply(V.q.setFromEuler(V.e)).normalize();
@@ -2408,6 +2667,39 @@ function createSpace(opts) {
     V.up.set(0, 1, 0).applyQuaternion(ship.quat);
     V.right.set(1, 0, 0).applyQuaternion(ship.quat);
     const fIn = ctrl ? (k.down('KeyW') ? 1 : 0) - (k.down('KeyS') ? 1 : 0) : 0;
+    const trueR = V.b.copy(origin).add(ship.pos).length();
+
+    /* pulse drive: spool, then cruise along the nose; drops out near worlds, at the boundary, or on S */
+    if (pulse.state === 'spool') {
+      pulse.t += dt;
+      ship.shake = Math.max(ship.shake, pulse.t * 0.25);
+      if (pulse.t >= 1.4) { pulse.state = 'on'; pulse.speed = Math.max(ship.vel.length(), 500); Sound.boost(); tel.pulseEngaged = true; }
+    }
+    if (pulse.state === 'on') {
+      if (fIn < 0) dropPulse('');
+      else {
+        pulse.speed = Math.min(PULSE_SPEED, pulse.speed + 4200 * dt);
+        World.fuel = Math.max(0, World.fuel - 0.15 * dt);
+        if (World.fuel <= 0) dropPulse('Fuel depleted');
+        // drop out inside a world's approach zone, but only if the nose is pointing into it: a course that
+        // just grazes the zone (or leaves the world you started at) keeps pulsing
+        for (const o of bodies) {
+          V.c.subVectors(o.pos, ship.pos);
+          const surf = V.c.length() - o.b.radius, along = V.c.dot(V.fwd), hitR = o.b.radius * 1.6 + 1500;
+          if (surf < o.b.radius * 2 + 2500 && along > 0 && V.c.lengthSq() - along * along < hitR * hitR) { dropPulse('Arriving at ' + o.b.name); break; }
+        }
+        if (pulse.state === 'on' && trueR > BOUNDARY_WARN - 20000 && V.b.copy(origin).add(ship.pos).dot(V.fwd) > 0) dropPulse('Approaching the outer boundary');
+      }
+      if (pulse.state === 'on') {
+        ship.vel.copy(V.fwd).multiplyScalar(pulse.speed);
+        ship.pos.addScaledVector(ship.vel, dt);
+        ship.throttle = damp(ship.throttle, 1, 6, dt);
+        ship.boost = damp(ship.boost, 1, 5, dt);
+        tel.boundary = trueR > BOUNDARY_WARN ? 1 : 0;
+        return;
+      }
+    }
+
     const boost = ctrl && fIn > 0 && (k.down('ShiftLeft') || k.down('ShiftRight')) && World.fuel > 0;
     if (boost && !ship.wasBoost) Sound.boost();
     ship.wasBoost = boost;
@@ -2418,22 +2710,19 @@ function createSpace(opts) {
     const acc = V.a.copy(V.fwd).multiplyScalar(thrust).addScaledVector(V.right, strafeX * 55).addScaledVector(V.up, strafeY * 55);
 
     // Outer boundary, a soft wall across the whole warning band: outward thrust fades to zero,
-    // outward speed bleeds off progressively, and past the edge a gentle spring eases the ship back.
-    const r = ship.pos.length();
-    tel.boundary = r > BOUNDARY_WARN ? (r > BOUNDARY ? 2 : 1) : 0;
+    // outward speed is braked to rest at the edge, and past it a gentle spring eases the ship back.
+    tel.boundary = trueR > BOUNDARY_WARN ? (trueR > BOUNDARY ? 2 : 1) : 0;
     let burn = 1;
-    if (r > BOUNDARY_WARN) {
-      const n = V.b.copy(ship.pos).multiplyScalar(1 / r);
-      const band = smooth(BOUNDARY_WARN, BOUNDARY, r);
+    if (trueR > BOUNDARY_WARN) {
+      const n = V.b.copy(origin).add(ship.pos).multiplyScalar(1 / trueR);
+      const band = smooth(BOUNDARY_WARN, BOUNDARY, trueR);
       const ao = acc.dot(n);
       if (ao > 0) acc.addScaledVector(n, -ao * band);
       burn = 1 - band * Math.max(0, V.fwd.dot(n) * Math.sign(thrust));   // no fuel for thrust the wall cancels
-      // brake outward speed at the constant deceleration (v² / 2·room) that brings the ship to rest
-      // exactly at the edge: a linear, predictable slowdown instead of a wall
       const vo = ship.vel.dot(n);
-      if (vo > 0) ship.vel.addScaledVector(n, -Math.min(vo, vo * vo / (2 * Math.max(BOUNDARY - r, 25)) * dt));
-      if (r > BOUNDARY) ship.vel.addScaledVector(n, -Math.min(60, (r - BOUNDARY) * 0.6) * dt);
-      if (r > BOUNDARY + 400) ship.pos.multiplyScalar((BOUNDARY + 400) / r);
+      if (vo > 0) ship.vel.addScaledVector(n, -Math.min(vo, vo * vo / (2 * Math.max(BOUNDARY - trueR, 25)) * dt));
+      if (trueR > BOUNDARY) ship.vel.addScaledVector(n, -Math.min(60, (trueR - BOUNDARY) * 0.6) * dt);
+      if (trueR > BOUNDARY + 400) ship.pos.addScaledVector(n, BOUNDARY + 400 - trueR);
     }
     if (fIn > 0) World.fuel = Math.max(0, World.fuel - dt * (boost ? 1.9 : 0.42) * burn);
     ship.vel.addScaledVector(acc, dt);
@@ -2450,8 +2739,9 @@ function createSpace(opts) {
     if (spd > maxS) ship.vel.multiplyScalar(lerp(1, maxS / spd, 1 - Math.exp(-(brake < 0.98 ? 3 : 1.6) * dt)));
     if (thrust === 0) ship.vel.multiplyScalar(Math.exp(-0.12 * dt));
     ship.pos.addScaledVector(ship.vel, dt);
-    ship.throttle = damp(ship.throttle, fIn > 0 ? 1 : 0.12, 6, dt);
-    ship.boost = damp(ship.boost, boost ? 1 : 0, 5, dt);
+    const spool = pulse.state === 'spool' ? pulse.t / 1.4 : 0;
+    ship.throttle = damp(ship.throttle, fIn > 0 || spool > 0 ? 1 : 0.12, 6, dt);
+    ship.boost = damp(ship.boost, boost ? 1 : spool * 0.6, 5, dt);
   }
 
   function autopilot(dt) {
@@ -2462,7 +2752,7 @@ function createSpace(opts) {
     V.q.setFromRotationMatrix(V.m);
     ship.quat.slerp(V.q, 1 - Math.exp(-2.6 * dt));
     V.fwd.set(0, 0, -1).applyQuaternion(ship.quat);
-    const target = Math.max(30, Math.min(300, (d - o.b.radius * 1.03) * 0.9));
+    const target = Math.max(30, Math.min(300 + o.b.radius * 0.3, (d - o.b.radius * 1.03) * 0.9));
     ship.vel.lerp(V.b.copy(V.fwd).multiplyScalar(target), 1 - Math.exp(-3 * dt));
     ship.pos.addScaledVector(ship.vel, dt);
     ship.throttle = damp(ship.throttle, 1, 4, dt); ship.boost = damp(ship.boost, 0.6, 3, dt);
@@ -2470,10 +2760,16 @@ function createSpace(opts) {
   }
 
   function mine(dt, ctrl, tel) {
-    const firing = ctrl && Input.left && mode === 'flight';
+    const firing = ctrl && Input.left && mode === 'flight' && pulse.state === 'off';
     tel.laser = firing;
     camera.getWorldDirection(V.aim);
-    const hit = belt.raycast(camera.position, V.aim, 1100);
+    let hit = null, hitField = null;
+    for (const fd of fields) {
+      V.c.subVectors(camera.position, fd.center);
+      if (V.c.length() > fd.f.radius + 1400) continue;
+      const h = fd.af.raycast(V.c, V.aim, hit ? hit.t : 1100);
+      if (h) { hit = h; hitField = fd; }
+    }
     tel.aimRock = hit ? hit.rock : null;
     beams.forEach((bm) => { bm.material.uniforms.uOn.value = firing ? 1 : 0; bm.visible = firing; });
     if (!firing) return;
@@ -2491,12 +2787,13 @@ function createSpace(opts) {
         Math.random() < 0.5 ? [6, 1.2, 0.3] : [4, 2.5, 1.2], 1.2 + Math.random() * 1.5, 0.35 + Math.random() * 0.4);
       if (r.hp <= 0) {
         r.dying = 1;
-        const gain = Math.round(4 + r.size * 0.7);
+        const gain = Math.round(4 + Math.min(r.size, 60) * 0.5);
         World.carbon += gain; World.stats.asteroids++;
         tel.reward = gain;
+        const c = V.a.copy(hitField.center).add(r.pos);
         for (let i = 0; i < 70; i++) {
           const s = 20 + r.size * 4;
-          sparks.emit(r.pos.x, r.pos.y, r.pos.z, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s,
+          sparks.emit(c.x, c.y, c.z, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s,
             Math.random() < 0.4 ? [3.5, 1.4, 0.4] : [0.55, 0.5, 0.45], 2 + Math.random() * r.size * 0.3, 0.8 + Math.random() * 1.2);
         }
         Sound.shatter(); Sound.pickup();
@@ -2506,6 +2803,7 @@ function createSpace(opts) {
 
   function updateCamera(dt) {
     const spdN = clamp(ship.vel.length() / 780, 0, 1);
+    const pulseN = pulse.state === 'on' ? clamp(pulse.speed / PULSE_SPEED, 0, 1) : 0;
     if (mode === 'intro') {
       introT += dt;
       const a = 0.55 + Math.sin(introT * 0.05) * 0.35;
@@ -2515,7 +2813,7 @@ function createSpace(opts) {
       camera.fov = 55;
     } else {
       camQ.slerp(ship.quat, 1 - Math.exp(-7 * dt));
-      camOff.set(0, 3.3, 15 + spdN * 5 + ship.boost * 2);
+      camOff.set(0, 3.3, 15 + spdN * 5 + ship.boost * 2 + pulseN * 4);
       V.a.copy(camOff).applyQuaternion(camQ).add(ship.pos);
       V.q.copy(camQ).multiply(pitchDown);
       if (blendT < 1) {
@@ -2529,8 +2827,8 @@ function createSpace(opts) {
         camera.position.copy(V.a);
         camera.quaternion.copy(V.q);
       }
-      camera.fov = damp(camera.fov, 64 + spdN * 12 + ship.boost * 8, 4, dt);
-      ship.shake = Math.max(ship.shake - dt * 1.5, ship.boost * 0.22);
+      camera.fov = damp(camera.fov, 64 + spdN * 12 + ship.boost * 8 + pulseN * 16, 4, dt);
+      ship.shake = Math.max(ship.shake - dt * 1.5, ship.boost * 0.22, pulseN * 0.3);
       if (ship.shake > 0) {
         const s = ship.shake * 0.35, t = World.time;
         camera.position.add(V.b.set(Math.sin(t * 47) * s, Math.sin(t * 59 + 1) * s, 0).applyQuaternion(camera.quaternion));
@@ -2539,20 +2837,22 @@ function createSpace(opts) {
     camera.updateProjectionMatrix();
   }
 
-  function updateDust() {
-    const cp = camera.position, h = DBOX * 0.5;
+  function updateDust(dt) {
     const spd = ship.vel.length();
-    const k = clamp(0.045, 0, 1), vis = clamp(spd / 160, 0.08, 1);
+    // the dust field drifts by the ship's motion, capped at a visual speed so warp travel never strobes
+    const vis = Math.min(spd, 1700);
+    if (spd > 1e-3) dustVirt.addScaledVector(ship.vel, (vis / spd) * dt);
+    const cp = camera.position, h = DBOX * 0.5, warp = clamp((spd - 800) / 3000, 0, 1);
+    const len = Math.min(0.045 * vis, 80) / Math.max(vis, 1e-3);
+    const bright = clamp(spd / 160, 0.08, 1);
     for (let i = 0; i < DUST; i++) {
       const j = i * 3, o = i * 6;
-      const x = ((dustBase[j] - cp.x) % DBOX + DBOX) % DBOX - h + cp.x;
-      const y = ((dustBase[j + 1] - cp.y) % DBOX + DBOX) % DBOX - h + cp.y;
-      const z = ((dustBase[j + 2] - cp.z) % DBOX + DBOX) % DBOX - h + cp.z;
-      dustPos[o] = x; dustPos[o + 1] = y; dustPos[o + 2] = z;
-      dustPos[o + 3] = x - ship.vel.x * k - 0.15; dustPos[o + 4] = y - ship.vel.y * k; dustPos[o + 5] = z - ship.vel.z * k;
-      const dx = x - cp.x, dy = y - cp.y, dzz = z - cp.z;
-      const f = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy + dzz * dzz) / h) * vis;
-      dustCol[o] = 0.55 * f; dustCol[o + 1] = 0.8 * f; dustCol[o + 2] = 1.0 * f;
+      const x = ((dustBase[j] - dustVirt.x) % DBOX + DBOX) % DBOX - h, y = ((dustBase[j + 1] - dustVirt.y) % DBOX + DBOX) % DBOX - h, z = ((dustBase[j + 2] - dustVirt.z) % DBOX + DBOX) % DBOX - h;
+      dustPos[o] = cp.x + x; dustPos[o + 1] = cp.y + y; dustPos[o + 2] = cp.z + z;
+      const sv = (vis / Math.max(spd, 1e-3)) * len;
+      dustPos[o + 3] = dustPos[o] - ship.vel.x * sv - 0.15; dustPos[o + 4] = dustPos[o + 1] - ship.vel.y * sv; dustPos[o + 5] = dustPos[o + 2] - ship.vel.z * sv;
+      const f = Math.max(0, 1 - Math.sqrt(x * x + y * y + z * z) / h) * bright;
+      dustCol[o] = (0.55 + warp * 0.3) * f; dustCol[o + 1] = (0.8 + warp * 0.4) * f; dustCol[o + 2] = (1.0 + warp * 0.6) * f;
       dustCol[o + 3] = 0; dustCol[o + 4] = 0.05 * f; dustCol[o + 5] = 0.1 * f;
     }
     dustGeo.attributes.position.needsUpdate = true;
@@ -2562,19 +2862,25 @@ function createSpace(opts) {
   function update(dt, ctrl) {
     const tel = { boundary: 0, heat: false, laser: false, impact: null, reward: 0, noFuel: false };
     World.time += dt;
-    updateBodies(World.time);
+    computePositions(World.time);
     if (mode === 'flight') fly(dt, ctrl, tel);
     else if (mode === 'autopilot') autopilot(dt);
     else { ship.pos.addScaledVector(ship.vel, dt); ship.throttle = 0.25; ship.boost = 0; Input.take(); }
+    rebase();
     if (mode !== 'autopilot') collide(dt, tel);
     shipModel.group.position.copy(ship.pos);
     shipModel.group.quaternion.copy(ship.quat);
     shipModel.setThrust(ship.throttle, ship.boost, World.time);
     updateCamera(dt);
-    belt.update(dt);
+    placeBodies(World.time);
+    // the sun lights the ship from its true direction
+    V.a.copy(origin).add(ship.pos).normalize();
+    sunLight.position.copy(ship.pos).addScaledVector(V.a, -100);
+    sunLight.target.position.copy(ship.pos);
+    fields.forEach((fd) => fd.af.update(dt));
     mine(dt, ctrl, tel);
     sparks.update(dt, Post.state.sh / (2 * Math.tan(camera.fov * Math.PI / 360)));
-    updateDust();
+    updateDust(dt);
     sunMat.uniforms.uTime.value = World.time;
     stars.material.uniforms.uTime.value = World.time;
     stars.material.uniforms.uPR.value = Post.pixelRatio();
@@ -2582,32 +2888,361 @@ function createSpace(opts) {
     tel.speed = ship.vel.length();
     tel.speedN = clamp(tel.speed / 780, 0, 1);
     tel.throttle = ship.throttle; tel.boostAmt = ship.boost;
+    tel.pulse = pulse.state; tel.pulseN = pulse.state === 'on' ? pulse.speed / PULSE_SPEED : pulse.state === 'spool' ? pulse.t / 1.4 : 0;
+    if (pulseNote) { tel.pulseNote = pulseNote; pulseNote = ''; }
     tel.pos = ship.pos;
+    tel.truePos = V.c.copy(origin).add(ship.pos);
     tel.nearest = nb.o.b; tel.nearestSurf = nb.surf;
     tel.landable = nb.o.b.landable && nb.surf < nb.o.b.radius * 0.9 + 70 ? nb.o.b : null;
     tel.giantClose = !nb.o.b.landable && nb.surf < nb.o.b.radius * 0.5 + 80;
     tel.stick = ship.stick;
+    const nav = bodyById[World.navTarget];
+    if (nav) {
+      const dist = Math.max(0, ship.pos.distanceTo(nav.pos) - nav.b.radius);
+      const rate = pulse.state === 'on' ? pulse.speed : Math.max(tel.speed, 1);
+      tel.nav = { b: nav.b, dist, eta: dist / (pulse.state === 'off' ? Math.max(tel.speed, 1) : PULSE_SPEED), pulseEta: dist / PULSE_SPEED + 3, rate };
+    }
     return tel;
   }
 
-  // position the camera immediately so the very first frame (and any launch blend) starts from a valid pose
-  updateBodies(World.time);
+  // position everything immediately so the very first frame (and any launch blend) starts from a valid pose
+  computePositions(World.time);
   updateCamera(0);
   if (mode === 'flight') { camera.position.copy(camOff.set(0, 3.3, 15)).applyQuaternion(ship.quat).add(ship.pos); camera.quaternion.copy(ship.quat).multiply(pitchDown); }
+  placeBodies(World.time);
 
-  function bodyWorldPos(id) { return bodyById[id].pos; }
+  /* system map data: true positions in the sun's frame */
+  function mapData() {
+    const st = V.c.copy(origin).add(ship.pos);
+    V.fwd.set(0, 0, -1).applyQuaternion(ship.quat);
+    return {
+      ship: { x: st.x, z: st.z, hx: V.fwd.x, hz: V.fwd.z },
+      bodies: bodies.map((o) => ({ b: o.b, x: o.truePos.x, z: o.truePos.z, dist: Math.max(0, ship.pos.distanceTo(o.pos) - o.b.radius) })),
+      fields: fields.map((fd) => ({ f: fd.f, x: fd.center.x + origin.x, z: fd.center.z + origin.z }))
+    };
+  }
+  function bodyRenderPos(id) { return bodyById[id].holder.position; }
+  function bodyPos(id) { return bodyById[id].pos; }
+  /* automation helper: put the ship `dist` above a body's surface along +z from its centre, facing it */
+  function teleportNear(id, dist) {
+    computePositions(World.time);
+    const o = bodyById[id];
+    origin.copy(o.truePos).add(V.a.set(0, 0, o.b.radius + dist));
+    ship.pos.set(0, 0, 0); ship.vel.set(0, 0, 0);
+    computePositions(World.time);
+    V.m.lookAt(ship.pos, o.pos, V.up.set(0, 1, 0));
+    ship.quat.setFromRotationMatrix(V.m); camQ.copy(ship.quat);
+    pulse.state = 'off';
+  }
   function dispose() {
-    scene.traverse((o) => { if (o.isMesh || o.isPoints || o.isLineSegments) { if (o.geometry && o.geometry !== hiSphere && o.geometry !== loSphere) o.geometry.dispose(); } });
-    hiSphere.dispose(); loSphere.dispose();
+    scene.traverse((o) => { if ((o.isMesh || o.isPoints || o.isLineSegments) && o.geometry && ![hiSphere, midSphere, loSphere, shellSphere].includes(o.geometry)) o.geometry.dispose(); });
+    [hiSphere, midSphere, loSphere, shellSphere].forEach((g) => g.dispose());
     scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose()); });
-    belt.dispose(); sparks.dispose();
+    fields.forEach((fd) => fd.af.dispose());
+    sparks.dispose();
   }
   return {
-    scene, camera, ship, update, dispose, beginFlight, startAutopilot, bodyWorldPos, bodies,
-    get mode() { return mode; },
+    scene, camera, ship, update, dispose, beginFlight, startAutopilot, togglePulse, mapData, bodyRenderPos, bodyPos, teleportNear, bodies, fields,
+    get mode() { return mode; }, get pulse() { return pulse.state; }, get origin() { return origin; },
     post: { threshold: 1.0, bloom: 0.85, exposure: 1.0, aberr: 0.0012, vignette: 0.5, sat: 1.1 }
   };
 }
+
+/* biomes-v2 · Phobos · v1 · voidwake (integrated from Designer - Phobos/assets/voidwake/biomes-v2.js)
+   Four new wild worlds: 'desert' (Sahri), 'umbra' (bioluminescent night jungle), 'ocean' (Thalassa archipelago),
+   'glass' (Crysalis prismatic world).
+
+   Exports on window.PHOBOS_VW:
+     propDefs(THREE, type, env)       same contract as the game's makePropDefs (array of instanced prop defs)
+     THEMES_V2[type]                  same fields as the game's THEMES objects
+     terrainColorFn(type, seed)       same contract as the game's makeColorFn(type, seed) → (out, x, z, h, slope, liquid)
+     IRIDESCENT                       onBeforeCompile hook: view-angle rainbow sheen on the emissive (glass world, Prismite)
+
+   Uses the game's existing model kit by name (xf, mergeTinted, tintByNormal, shadeByHeight, tubeGeo, lathe, lumpy, lin,
+   linArr, lerp3, smooth, makeNoise2D, mulberry32, TAU). In the Phobos viewer those come from kit.js.
+
+   Optional def field (new): heightBand: [min, max] metres above the liquid level, for props that belong on the shore
+   (palms, coral). Ignored safely if the game's placer doesn't read it. */
+(() => {
+  const VW = (window.PHOBOS_VW = window.PHOBOS_VW || {});
+
+  /* view-angle rainbow sheen added to the emissive; shared program (same function source) */
+  VW.IRIDESCENT = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      { float fr = 1.0 - abs(dot(normal, normalize(vViewPosition)));
+        vec3 hue = 0.5 + 0.5 * cos(6.2832 * (fr * 1.4 + vViewPosition.y * 0.02 + vec3(0.0, 0.33, 0.67)));
+        totalEmissiveRadiance += hue * (0.12 + 1.15 * fr * fr); }`);
+  };
+
+  const grey = (v) => new THREE.Color(v, v, v);
+  /* alternate per-face shading around a tube (ribs) or along it (bands/strata); tubeGeo emits 2 tris per side per band */
+  const ribShade = (g, sides, a, b, byBand) => {
+    const P = g.attributes.position, c = new Float32Array(P.count * 3);
+    for (let t = 0; t < P.count / 3; t++) {
+      const band = Math.floor(t / (sides * 2)), side = Math.floor(t / 2) % sides, v = (byBand ? band : side) % 2 ? a : b;
+      for (let k = 0; k < 9; k++) c[t * 9 + k] = v;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    return g;
+  };
+  /* multiply an existing colour attribute by a height ramp (AO at the root) */
+  const darkenBase = (g, y0, y1, v0) => {
+    const P = g.attributes.position, C = g.attributes.color;
+    for (let i = 0; i < P.count; i++) { const k = lerp(v0, 1, clamp((P.getY(i) - y0) / (y1 - y0), 0, 1)); C.setXYZ(i, C.getX(i) * k, C.getY(i) * k, C.getZ(i) * k); }
+    return g;
+  };
+  /* clump of flat bent blades (3 tris each), dark root → bright tip */
+  const blades = (rnd, count, h, w, spread, bend, v0, v1) => {
+    const list = [];
+    for (let i = 0; i < count; i++) {
+      const bh = h * (0.55 + rnd() * 0.6), bw = w * (0.7 + rnd() * 0.6), lean = bend * (0.5 + rnd());
+      const p = [[-bw / 2, 0, 0], [bw / 2, 0, 0], [bw * 0.3, bh * 0.55, lean * 0.35], [-bw * 0.3, bh * 0.55, lean * 0.35], [0, bh, lean]];
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([...p[0], ...p[1], ...p[2], ...p[0], ...p[2], ...p[3], ...p[3], ...p[2], ...p[4]], 3));
+      g.computeVertexNormals();
+      shadeByHeight(g, 0, h, v0 === undefined ? 0.42 : v0, v1 === undefined ? 1.12 : v1);
+      list.push([xf(g, (rnd() - 0.5) * spread, 0, (rnd() - 0.5) * spread, 0, rnd() * TAU, 0), null]);
+    }
+    return mergeTinted(list);
+  };
+  /* a long curving frond: tapered strip of `seg` quads that arcs out and droops (2 tris per segment) */
+  const frond = (len, width, rise, droop, seg, v0, v1) => {
+    const pos = [], col = [];
+    const pt = (t, side) => {
+      const w = width * Math.sin(Math.PI * Math.min(1, t * 1.15 + 0.05)) * (1 - t * 0.35);
+      return [side * w, rise * t - droop * t * t, len * t];
+    };
+    for (let i = 0; i < seg; i++) {
+      const t0 = i / seg, t1 = (i + 1) / seg, a = pt(t0, -1), b = pt(t0, 1), c = pt(t1, -1), d = pt(t1, 1);
+      pos.push(...a, ...b, ...c, ...b, ...d, ...c);
+      const s0 = lerp(v0, v1, t0), s1 = lerp(v0, v1, t1);
+      col.push(s0, s0, s0, s0, s0, s0, s1, s1, s1, s0, s0, s0, s1, s1, s1, s1, s1, s1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    return g;
+  };
+  /* rugged boulder (ico detail 1 = 80 tris, or dodecahedron = 36 tris), lit top / dark underside */
+  const boulder = (n, detail, top, side, bottom, amp) => {
+    const g = lumpy(detail ? new THREE.IcosahedronGeometry(1, 1) : new THREE.DodecahedronGeometry(1, 0), n, amp || (detail ? 0.22 : 0.16), 1.4);
+    g.translate(0, 0.35, 0);
+    return tintByNormal(g, top, side, bottom);
+  };
+  /* horizontal strata: per-face light/dark bands by height (sandstone) */
+  const strata = (g, step, a, b) => {
+    const P = g.attributes.position, C = g.attributes.color;
+    for (let i = 0; i < P.count; i += 3) {
+      const y = (P.getY(i) + P.getY(i + 1) + P.getY(i + 2)) / 3, k = Math.floor(y / step) % 2 ? a : b;
+      for (let v = 0; v < 3; v++) C.setXYZ(i + v, C.getX(i + v) * k, C.getY(i + v) * k, C.getZ(i + v) * k);
+    }
+    return g;
+  };
+  const prism = (r, h, seg, base) => lathe([[r, base === undefined ? -0.3 : base], [r, h * 0.72], [0, h]], seg || 6);
+
+  VW.propDefs = function propDefs(THREE_, type, env) {
+    const S = (o) => new THREE.MeshStandardMaterial(Object.assign({ envMap: env, envMapIntensity: 0.5, roughness: 0.85, metalness: 0.0 }, o));
+    const rnd = mulberry32(4242 + type.length * 31), n = makeNoise2D(777 + type.length);
+
+    if (type === 'desert') {
+      // saguaro-style succulent (~156 tris): ribbed six-sided trunk and two up-turned arms; ribs alternate light/dark
+      const trunk = ribShade(tubeGeo([[0, -0.3, 0, 0.34], [0, 1.0, 0, 0.37], [0, 2.4, 0, 0.33], [0, 3.3, 0, 0.24], [0, 3.62, 0, 0.1], [0, 3.72, 0, 0.001]], 6), 6, 1.12, 0.78);
+      const arm = (s, y, h) => ribShade(tubeGeo([[0.25 * s, y, 0, 0.2], [0.78 * s, y + 0.18, 0, 0.18], [0.98 * s, y + 0.6, 0, 0.17], [1.0 * s, y + h, 0, 0.12], [1.0 * s, y + h + 0.18, 0, 0.001]], 6), 6, 1.1, 0.8);
+      const cactus = mergeTinted([[darkenBase(trunk, -0.3, 1.2, 0.55), null], [arm(1, 1.3, 1.3), null], [arm(-1, 1.9, 0.9), null]]);
+      // bleached bone spire (96 tris, unit size; game scales it 7–25 m tall): knobbly, curving, ivory
+      const bone = [];
+      for (let i = 0; i <= 8; i++) { const t = i / 8; bone.push([0.55 * t * t, t, 0.12 * Math.sin(t * 4) * t, Math.max(0.001, (1 - Math.pow(t, 0.85)) * (1 + 0.14 * Math.sin(t * 26)))]); }
+      const spire = shadeByHeight(tubeGeo(bone, 6, 0.2), 0, 1, 0.72, 1.12);
+      // wind-carved sandstone arch (~162 tris) with weathered pedestals, banded strata
+      const arch = xf(new THREE.TorusGeometry(1.6, 0.6, 6, 10, Math.PI), 0, 0, 0, 0, 0, 0, 1.15, 1.3, 1).toNonIndexed();
+      { const P = arch.attributes.position, N = arch.attributes.normal;     // erode along the smooth normals (no cracks)
+        for (let i = 0; i < P.count; i++) { const k = n(P.getX(i) * 1.3 + P.getZ(i), P.getY(i) * 1.3 - P.getZ(i)) * 0.22;
+          P.setXYZ(i, P.getX(i) + N.getX(i) * k, P.getY(i) + N.getY(i) * k, P.getZ(i) + N.getZ(i) * k); }
+        arch.computeVertexNormals(); }
+      const peds = [-1.84, 1.84].map((x) => tintByNormal(lumpy(new THREE.DodecahedronGeometry(0.95, 0), n, 0.18, 1.6).translate(x, 0.1, 0), grey(1), grey(1), grey(1)));
+      const archGeo = mergeTinted([[strata(tintByNormal(arch, grey(1.1), grey(0.86), grey(0.55)), 0.32, 1.0, 0.82), null], ...peds.map((g) => [strata(g, 0.32, 1.0, 0.82), null])]);
+      const sandRock = strata(boulder(n, 0, grey(1.15), grey(0.85), grey(0.55)), 0.18, 1.0, 0.8);
+      return [
+        { parts: [[cactus, S({ color: 0xffffff, roughness: 0.7, flatShading: true, vertexColors: true })]], perTile: 4, scale: [0.7, 1.5], shadow: true, maxSlope: 0.3, colorPart: 0,
+          colors: [0x5f8f3a, 0x7a9e45, 0x4d7f52, 0x93a24a] },
+        { parts: [[spire, S({ color: lin(0xe8dcc0), roughness: 0.6, flatShading: true, vertexColors: true })]], perTile: 2, scale: [1, 1], shadow: true, maxSlope: 0.5, spire: true },
+        { parts: [[archGeo, S({ color: lin(0xc98a55), flatShading: true, vertexColors: true })]], perTile: 1, scale: [0.8, 2.8], shadow: true, maxSlope: 0.3 },
+        { parts: [[sandRock, S({ color: lin(0xc48b5a), flatShading: true, vertexColors: true })]], perTile: 4, scale: [0.4, 2.2], shadow: true, maxSlope: 1, squash: true },
+        // dry grass (18 tris)
+        { parts: [[blades(rnd, 6, 1.0, 0.09, 0.6, 0.3, 0.5, 1.1), S({ color: 0xffffff, side: THREE.DoubleSide, vertexColors: true })]], perTile: 14, scale: [0.6, 1.3], maxSlope: 0.45, colorPart: 0,
+          colors: [0xc9a85a, 0xb08d48, 0xd8c27a] }
+      ];
+    }
+
+    if (type === 'umbra') {
+      // fungus tree: dark stem + bell cap (part 0, ~132 tris), glowing gill skirt and hanging bulbs (part 1, MeshBasic HDR tint, ~40 tris)
+      const stem = shadeByHeight(tubeGeo([[0, -0.3, 0, 0.36], [0.1, 1.5, 0, 0.27], [0.25, 3.0, 0.05, 0.21], [0.3, 4.3, 0.1, 0.19]], 6), 0, 4.3, 0.45, 1.0);
+      const cap = shadeByHeight(lathe([[0.08, 0.0], [1.2, -0.2], [1.9, -0.55], [1.98, -0.42], [1.45, 0.35], [0.6, 0.78], [0, 0.88]], 8), -0.5, 0.8, 0.6, 1.1);
+      const fungus = mergeTinted([[stem, null], [xf(cap, 0.3, 4.25, 0.1), null]]);
+      const glow = [xf(lathe([[0.32, -0.04], [1.82, -0.5]], 8), 0.3, 4.22, 0.1)];
+      for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + 0.4; glow.push(xf(new THREE.OctahedronGeometry(0.11, 0), 0.3 + Math.cos(a) * 1.6, 3.35 - (i % 2) * 0.35, 0.1 + Math.sin(a) * 1.6, 0, 0, 0, 1, 1.6, 1)); }
+      glow.push(xf(lathe([[1.99, -0.5], [2.03, -0.38]], 8), 0.3, 4.25, 0.1));                       // luminous rim band
+      for (let i = 0; i < 5; i++) { const a = (i / 5) * TAU + 0.2, r = 0.75 + (i % 2) * 0.45, y = r < 1 ? 0.66 : 0.42;   // glowing spots on the cap
+        glow.push(xf(new THREE.OctahedronGeometry(0.15, 0), 0.3 + Math.cos(a) * r, 4.25 + y, 0.1 + Math.sin(a) * r, 0, a, 0, 1, 0.45, 1)); }
+      const gills = mergeGeos(glow);
+      // luminous fern (7 fronds × 4 segments = 56 tris): unlit, dark at the root, glowing at the tips
+      const fern = mergeTinted(Array.from({ length: 7 }, (_, i) => [xf(frond(1.5 + (i % 3) * 0.35, 0.16, 0.9, 1.1, 4, 0.04, 1.0), 0, 0.05, 0, -0.25, (i / 7) * TAU + rnd() * 0.4, 0), null]));
+      // floating spore pods (3 × 20 tris), hovering 1.8–3.2 m up
+      const spores = mergeGeos([0, 1, 2].map((i) => xf(new THREE.IcosahedronGeometry(0.22 - i * 0.04, 0), (rnd() - 0.5) * 1.2, 1.8 + i * 0.6, (rnd() - 0.5) * 1.2)));
+      const rock = boulder(n, 1, new THREE.Color(0.75, 1.15, 1.05), grey(0.8), grey(0.45));
+      const glowMat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+      return [
+        { parts: [[fungus, S({ color: lin(0x2a1840), roughness: 0.7, flatShading: true, vertexColors: true })], [gills, glowMat()]], perTile: 5, scale: [0.7, 1.6], shadow: false, maxSlope: 0.35, colorPart: 1,
+          colors: [[0.3, 2.6, 3.2], [3.0, 0.5, 2.6], [1.6, 3.0, 0.4]] },
+        { parts: [[fern, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, vertexColors: true })]], perTile: 14, scale: [0.6, 1.4], maxSlope: 0.5, colorPart: 0,
+          colors: [[0.2, 1.6, 1.4], [1.3, 0.3, 1.5], [0.9, 1.8, 0.25]] },
+        { parts: [[spores, glowMat()]], perTile: 6, scale: [0.7, 1.4], maxSlope: 1, colorPart: 0,
+          colors: [[0.4, 2.2, 2.6], [2.4, 0.6, 2.2], [2.0, 2.4, 0.5]] },
+        { parts: [[rock, S({ color: lin(0x2a2236), flatShading: true, vertexColors: true })]], perTile: 3, scale: [0.5, 2.2], shadow: true, maxSlope: 1, squash: true }
+      ];
+    }
+
+    if (type === 'ocean') {
+      // leaning palm: segmented trunk (part 0, 50 tris) + drooping crown with coconuts (part 1, ~66 tris)
+      const rings = [];
+      for (let i = 0; i <= 5; i++) { const t = i / 5; rings.push([1.8 * Math.pow(t, 1.6), -0.3 + 6.8 * t, 0, 0.3 - 0.11 * t]); }
+      const trunk = darkenBase(ribShade(tubeGeo(rings, 5), 5, 1.08, 0.78, true), -0.3, 1.5, 0.6);
+      const crownParts = [];
+      for (let i = 0; i < 7; i++) crownParts.push([xf(frond(3.0 + (i % 2) * 0.5, 0.42, 0.9, 2.4, 3, 0.55, 1.1), 1.8, 6.45, 0, 0, (i / 7) * TAU + 0.2, 0), null]);
+      for (let i = 0; i < 3; i++) { const a = (i / 3) * TAU; crownParts.push([xf(new THREE.OctahedronGeometry(0.17, 0), 1.8 + Math.cos(a) * 0.22, 6.2, Math.sin(a) * 0.22), grey(0.45)]); }
+      const crown = mergeTinted(crownParts);
+      // coral-crystal outcrop (~132 tris): lump base, four branching tubes tipped with crystal points
+      const coralParts = [[tintByNormal(lumpy(new THREE.DodecahedronGeometry(0.7, 0), n, 0.2, 1.7).translate(0, 0.15, 0), grey(1), grey(0.8), grey(0.55)), null]];
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * TAU + rnd() * 0.6, l = 0.9 + rnd() * 0.8, ox = Math.cos(a), oz = Math.sin(a);
+        coralParts.push([shadeByHeight(tubeGeo([[ox * 0.2, 0.2, oz * 0.2, 0.16], [ox * 0.45, 0.2 + l * 0.6, oz * 0.45, 0.11], [ox * 0.6, 0.2 + l, oz * 0.6, 0.07]], 4), 0, 2, 0.75, 1.15), null]);
+        coralParts.push([xf(new THREE.OctahedronGeometry(0.13, 0), ox * 0.6, 0.32 + l, oz * 0.6, 0, a, 0, 1, 1.9, 1), grey(1.35)]);
+      }
+      const coral = mergeTinted(coralParts);
+      const tide = boulder(n, 1, new THREE.Color(1.1, 1.05, 0.9), grey(0.8), grey(0.42));
+      return [
+        { parts: [[trunk, S({ color: lin(0x9a7a55), flatShading: true, vertexColors: true })], [crown, S({ color: 0xffffff, roughness: 0.6, side: THREE.DoubleSide, flatShading: true, vertexColors: true })]],
+          perTile: 4, scale: [0.75, 1.35], shadow: true, maxSlope: 0.3, colorPart: 1, heightBand: [0.3, 7],
+          colors: [0x3f9a3a, 0x5cae3e, 0x2f8a52, 0x7fb84a] },
+        { parts: [[coral, S({ color: 0xffffff, roughness: 0.35, metalness: 0.1, envMapIntensity: 1.0, flatShading: true, vertexColors: true })]], perTile: 3, scale: [0.6, 1.6], shadow: true, maxSlope: 0.6,
+          colorPart: 0, heightBand: [-0.2, 1.6], colors: [0xff6f91, 0xff9a5a, 0x4fd6c8, 0xc77dff] },
+        { parts: [[tide, S({ color: lin(0x6d6a66), flatShading: true, vertexColors: true })]], perTile: 4, scale: [0.4, 2.0], shadow: true, maxSlope: 1, squash: true },
+        { parts: [[blades(rnd, 7, 1.1, 0.1, 0.6, 0.35), S({ color: 0xffffff, side: THREE.DoubleSide, vertexColors: true })]], perTile: 10, scale: [0.6, 1.3], maxSlope: 0.45, colorPart: 0,
+          colors: [0x9fcf5a, 0xc5d77a, 0x7cbf5a] }
+      ];
+    }
+
+    // 'glass' (Crysalis): every prop is faceted glass with the iridescent sheen; palette tints the body
+    const glassMat = (o) => { const m = S(Object.assign({ color: 0xffffff, roughness: 0.08, metalness: 0.3, envMapIntensity: 1.6, flatShading: true, vertexColors: true }, o)); m.onBeforeCompile = VW.IRIDESCENT; return m; };
+    // prismatic spire cluster (72 tris, unit size; game scales 7–25 m tall)
+    const spireC = mergeTinted([[shadeByHeight(prism(0.55, 1, 6, -0.05), 0, 1, 0.6, 1.2), null],
+      [xf(shadeByHeight(prism(0.32, 0.62, 6, -0.05), 0, 0.62, 0.6, 1.2), 0.5, 0, 0.2, 0.2, 0.4, -0.3), null],
+      [xf(shadeByHeight(prism(0.26, 0.45, 6, -0.05), 0, 0.45, 0.6, 1.2), -0.42, 0, -0.25, -0.25, 1.1, 0.35), null]]);
+    // crystal "tree" (~132 tris): twisted prism trunk, three angled branches, octahedral crystal crowns
+    const treeParts = [[shadeByHeight(tubeGeo([[0, -0.3, 0, 0.3], [0, 1.4, 0, 0.24], [0, 2.8, 0, 0.18], [0, 3.6, 0, 0.12]], 5, 0.4), 0, 3.6, 0.6, 1.0), null]];
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU + 0.3, ox = Math.cos(a), oz = Math.sin(a);
+      treeParts.push([xf(prism(0.12, 1.6, 5, 0), ox * 0.1, 2.6 + i * 0.35, oz * 0.1, oz * 0.85, 0, -ox * 0.85), grey(0.9)]);
+      treeParts.push([xf(new THREE.OctahedronGeometry(0.55, 0), ox * 1.15, 3.85 + i * 0.35, oz * 1.15, 0.3, a, 0.2, 1, 1.5, 1), grey(1.2)]);
+    }
+    treeParts.push([xf(new THREE.OctahedronGeometry(0.7, 0), 0, 4.3, 0, 0, 0.5, 0, 1, 1.7, 1), grey(1.25)]);
+    const tree = mergeTinted(treeParts);
+    const shards = mergeTinted([[shadeByHeight(prism(0.22, 1.1, 5), 0, 1.1, 0.6, 1.2), null], [xf(shadeByHeight(prism(0.14, 0.7, 5), 0, 0.7, 0.6, 1.2), 0.25, 0, 0.1, 0.3, 0.6, -0.5), null]]);
+    const pebble = boulder(n, 0, grey(1.15), grey(0.9), grey(0.6), 0.1);
+    const PAL = [0xff9ad5, 0xb48cff, 0x6fe3d6, 0xe8d2ff, 0x9fc4ff];
+    return [
+      { parts: [[spireC, glassMat()]], perTile: 2, scale: [1, 1], shadow: true, maxSlope: 0.5, spire: true, colorPart: 0, colors: PAL },
+      { parts: [[tree, glassMat()]], perTile: 4, scale: [0.7, 1.5], shadow: true, maxSlope: 0.3, colorPart: 0, colors: PAL },
+      { parts: [[shards, glassMat()]], perTile: 8, scale: [0.5, 1.6], shadow: false, maxSlope: 0.6, tilt: 0.5, colorPart: 0, colors: PAL },
+      { parts: [[pebble, glassMat({ roughness: 0.2 })]], perTile: 4, scale: [0.4, 1.8], shadow: true, maxSlope: 1, squash: true, colorPart: 0, colors: [0xdcd6f0, 0xc8e8ec, 0xf0d6e8] }
+    ];
+  };
+
+  /* ---------------------------------------------------------------- themes (same fields as the game's THEMES) */
+  const V = (x, y, z) => new THREE.Vector3(x, y, z).normalize();
+  VW.THEMES_V2 = {
+    desert: {
+      zenith: linArr(0x3b7fd0), horizon: linArr(0xf2d6a2), sunCol: [2.0, 1.72, 1.25], sunI: 2.4,
+      sunDir: V(0.2, 0.85, -0.3), hemiSky: linArr(0xffe2b0), hemiGround: linArr(0x8a5a2a), hemiI: 0.9,
+      stars: 0, cloud: 0.25, cloudCol: [1.1, 1.0, 0.9], skyPlanetDir: V(-0.6, 0.35, -0.7), skyPlanetSize: 0.1,
+      fogNear: 50, fogFar: 240, gravity: 17, liquid: 'water', liquidLevel: -9,
+      moteColor: [1.3, 1.05, 0.7], moteDrift: [2.2, 0.2, 0.6], moteSize: 0.06, moteSway: 2.0,
+      crystal: 0xff6a2a, monolith: 0x5a3a24, cond: 'Arid · 48°C · Sandstorms', exposure: 0.85, bloom: 0.55, threshold: 1.35
+    },
+    umbra: {
+      zenith: linArr(0x070414), horizon: linArr(0x2a1450), sunCol: [0.5, 0.45, 0.8], sunI: 0.35,
+      sunDir: V(-0.4, 0.18, -0.9), hemiSky: linArr(0x4a2c8a), hemiGround: linArr(0x0a1a1a), hemiI: 0.55,
+      stars: 1.0, cloud: 0.3, cloudCol: [0.35, 0.25, 0.6], skyPlanetDir: V(0.5, 0.45, -0.75), skyPlanetSize: 0.32,
+      fogNear: 22, fogFar: 170, gravity: 16, liquid: 'water', liquidLevel: -1.5,
+      moteColor: [0.6, 2.4, 1.8], moteDrift: [0.2, 0.5, 0.15], moteSize: 0.08, moteSway: 1.4,
+      crystal: 0x5dffc8, monolith: 0x1a1030, cond: 'Eternal dusk · 19°C · Spore-laden', exposure: 1.25, bloom: 1.0, threshold: 0.9
+    },
+    ocean: {
+      zenith: linArr(0x1f78e0), horizon: linArr(0xb8f0ff), sunCol: [1.8, 1.65, 1.4], sunI: 2.3,
+      sunDir: V(0.45, 0.7, -0.5), hemiSky: linArr(0xa8e6ff), hemiGround: linArr(0x2a8a8a), hemiI: 0.95,
+      stars: 0, cloud: 0.8, cloudCol: [1.1, 1.1, 1.12], skyPlanetDir: V(-0.5, 0.3, -0.8), skyPlanetSize: 0.12,
+      fogNear: 60, fogFar: 260, gravity: 18, liquid: 'water', liquidLevel: 3.0,
+      moteColor: [1.2, 1.25, 1.3], moteDrift: [1.0, 0.3, 0.4], moteSize: 0.06, moteSway: 1.1,
+      crystal: 0xff7fa8, monolith: 0x2b4b5a, cond: 'Oceanic · 27°C · Humid', exposure: 0.9, bloom: 0.6, threshold: 1.3
+    },
+    glass: {
+      zenith: linArr(0x2a1b5e), horizon: linArr(0xf0d8ff), sunCol: [1.6, 1.5, 1.9], sunI: 2.0,
+      sunDir: V(-0.5, 0.5, 0.7), hemiSky: linArr(0xe0c8ff), hemiGround: linArr(0x6fb5c8), hemiI: 1.0,
+      stars: 0.35, cloud: 0.2, cloudCol: [1.05, 0.95, 1.15], skyPlanetDir: V(0.4, 0.5, -0.77), skyPlanetSize: 0.22,
+      fogNear: 45, fogFar: 230, gravity: 11, liquid: 'ice', liquidLevel: -3,
+      moteColor: [1.6, 1.4, 2.0], moteDrift: [0.3, 0.1, 0.3], moteSize: 0.05, moteSway: 0.7,
+      crystal: 0xd59bff, monolith: 0x3a3358, cond: 'Crystalline · −12°C · Resonant', exposure: 0.88, bloom: 0.75, threshold: 1.2
+    }
+  };
+
+  /* ---------------------------------------------------------------- terrain colours (same contract as makeColorFn) */
+  VW.terrainColorFn = function terrainColorFn(type, seed) {
+    const n = makeNoise2D(seed + 301), P = (h) => linArr(h);
+    if (type === 'desert') {
+      const sand = P(0xe8c58a), shade = P(0xd09a5a), crust = P(0xf2e2bc), red = P(0xb0623a), dark = P(0x6e4630);
+      return (out, x, z, h, slope, liquid) => {
+        const ripple = Math.sin(x * 0.35 + z * 0.12 + n(x / 40, z / 40) * 6) * 0.5 + 0.5;
+        let c = lerp3(sand, shade, ripple * 0.35 + smooth(0.5, 0.9, n(x / 60, z / 60) * 0.5 + 0.5) * 0.4);
+        c = lerp3(c, crust, smooth(0.75, 0.95, n(x / 18 + 7, z / 18) * 0.5 + 0.5) * 0.6);
+        c = lerp3(c, red, smooth(0.25, 0.45, slope));
+        c = lerp3(c, dark, smooth(0.5, 0.7, slope) * 0.7);
+        c = lerp3(c, P(0x8a6a3a), smooth(liquid + 1.0, liquid + 0.2, h));
+        out[0] = c[0]; out[1] = c[1]; out[2] = c[2];
+      };
+    }
+    if (type === 'umbra') {
+      const ground = P(0x241238), moss = P(0x0f3a3a), patch = P(0x3a1c5c), rock = P(0x18121f), mud = P(0x0d0a14);
+      return (out, x, z, h, slope, liquid) => {
+        const v = n(x / 30, z / 30) * 0.5 + 0.5;
+        let c = lerp3(ground, moss, smooth(0.45, 0.8, v));
+        c = lerp3(c, patch, smooth(0.8, 0.95, n(x / 8 + 3, z / 8) * 0.5 + 0.5) * 0.8);
+        c = lerp3(c, mud, smooth(liquid + 1.2, liquid + 0.2, h));
+        c = lerp3(c, rock, smooth(0.3, 0.55, slope));
+        out[0] = c[0]; out[1] = c[1]; out[2] = c[2];
+      };
+    }
+    if (type === 'ocean') {
+      const sand = P(0xf0dca8), wet = P(0xb89c6a), grass = P(0x6fcf5a), rock = P(0x7a6e60), seabed = P(0x2fb5a8);
+      return (out, x, z, h, slope, liquid) => {
+        let c = lerp3(sand, grass, smooth(liquid + 2.5, liquid + 5, h) * (0.6 + 0.4 * (n(x / 20, z / 20) * 0.5 + 0.5)));
+        c = lerp3(c, wet, smooth(liquid + 0.9, liquid + 0.1, h));
+        c = lerp3(c, seabed, smooth(liquid - 0.2, liquid - 2.5, h));
+        c = lerp3(c, rock, smooth(0.35, 0.6, slope));
+        out[0] = c[0]; out[1] = c[1]; out[2] = c[2];
+      };
+    }
+    const pale = P(0xeef0ff), lilac = P(0xd8c4f0), teal = P(0x9fe0dc), pink = P(0xf6c6e4), dark = P(0x4a4070);
+    return (out, x, z, h, slope) => {
+      const v = n(x / 45, z / 45) * 0.5 + 0.5, w = n(x / 12 + 5, z / 12) * 0.5 + 0.5;
+      let c = lerp3(pale, lilac, smooth(0.35, 0.75, v));
+      c = lerp3(c, teal, smooth(0.7, 0.9, w) * 0.6);
+      c = lerp3(c, pink, smooth(0.75, 0.95, n(x / 25 - 9, z / 25) * 0.5 + 0.5) * 0.5);
+      c = lerp3(c, dark, smooth(0.35, 0.6, slope));
+      out[0] = c[0]; out[1] = c[1]; out[2] = c[2];
+    };
+  };
+})();
 
 /* =====================================================================
    GROUND — biome themes
@@ -2640,6 +3275,10 @@ const THEMES = {
 };
 
 /* Terrain height fields evaluated on the CPU (shared by mesh, props, nodes and player collision) */
+// body type → Phobos biome type, for the four Phobos-designed worlds
+const PHOBOS_BIOME = { desert: 'desert', biolum: 'umbra', ocean: 'ocean', prism: 'glass' };
+Object.keys(PHOBOS_BIOME).forEach((t) => { THEMES[t] = PHOBOS_VW.THEMES_V2[PHOBOS_BIOME[t]]; });
+
 function makeHeightField(type, seed, liquid) {
   const n = makeNoise2D(seed), n2 = makeNoise2D(seed + 77);
   const fbm = (x, z, o) => { let a = 0.5, s = 0, f = 1, t = 0; for (let i = 0; i < o; i++) { s += a * n(x * f + i * 17.1, z * f - i * 9.7); t += a; f *= 2.02; a *= 0.5; } return s / t; };
@@ -2661,6 +3300,25 @@ function makeHeightField(type, seed, liquid) {
     h = st * (fl + smooth(0.3, 0.7, t - fl)) * 0.75 + h * 0.25;
     return h + n(x / 9, z / 9) * 0.35;
   };
+  else if (type === 'desert') raw = (x, z) => {
+    // wind-ridged dunes over broad basins, with flat-topped mesas rising where a low-frequency field peaks
+    const dune = Math.abs(Math.sin((x * 0.6 + z * 0.25) / 18 + n(x / 90, z / 90) * 2.2));
+    const mesa = smooth(0.25, 0.4, fbm(x / 160 + 9, z / 160, 3));
+    return fbm(x / 260, z / 260, 3) * 14 + dune * 3.2 + mesa * 22 + n(x / 11, z / 11) * 0.3;
+  };
+  else if (type === 'biolum') raw = (x, z) => fbm(x / 200, z / 200, 4) * 20 + ridge(x / 110, z / 110, 3) * 10 + n(x / 15, z / 15) * 0.6;
+  else if (type === 'ocean') raw = (x, z) => {
+    // mostly sea floor; islands break the surface where two noise fields agree
+    const isl = smooth(0.1, 0.5, fbm(x / 120 + 3, z / 120, 3));
+    return fbm(x / 240, z / 240, 4) * 22 - 4 + isl * 10 + n(x / 13, z / 13) * 0.4;
+  };
+  else if (type === 'prism') raw = (x, z) => {
+    // faceted terraces of glass
+    const r = ridge(x / 120, z / 120, 4);
+    const h = Math.pow(r, 1.6) * 26 + fbm(x / 300, z / 300, 3) * 10;
+    const st = 3, t = h / st, fl = Math.floor(t);
+    return st * (fl + smooth(0.4, 0.6, t - fl)) * 0.6 + h * 0.4;
+  };
   else raw = (x, z) => {
     let h = fbm(x / 210, z / 210, 4) * 20;
     h += Math.pow(1 - Math.abs(n(x / 55, z / 75)), 3) * 5;
@@ -2677,6 +3335,7 @@ function makeHeightField(type, seed, liquid) {
 
 /* Per-vertex biome colouring (linear RGB written straight into the colour attribute) */
 function makeColorFn(type, seed) {
+  if (PHOBOS_BIOME[type]) return PHOBOS_VW.terrainColorFn(PHOBOS_BIOME[type], seed);
   const n = makeNoise2D(seed + 301);
   const P = (h) => linArr(h);
   if (type === 'lush') {
@@ -2733,6 +3392,7 @@ function mergeGeos(list) {
    Models (Phobos): vertex-colour ramps give every prop a darker base and lit top under the per-instance tint;
    triangle counts per instance are noted because 81 tiles × perTile multiplies them (and casters draw twice). */
 function makePropDefs(type, env) {
+  if (PHOBOS_BIOME[type]) return PHOBOS_VW.propDefs(THREE, PHOBOS_BIOME[type], env);
   const S = (o) => new THREE.MeshStandardMaterial(Object.assign({ envMap: env, envMapIntensity: 0.5, roughness: 0.85, metalness: 0.0 }, o));
   const rnd = mulberry32(99), n = makeNoise2D(1234);
   // a clump of flat bent blades: 3 triangles each (base quad + tip), shaded dark at the root
@@ -2977,7 +3637,8 @@ function createTerrain(scene, type, seed, env, theme) {
         const s = lerp(d.scale[0], d.scale[1], Math.pow(rnd(), 1.6));
         const yaw = rnd() * TAU, r1 = rnd(), r2 = rnd(), ci = rnd();
         const h = height(x, z);
-        const ok = h > liquid + 0.25 && (x * x + z * z) > 160 && slopeAt(x, z) < d.maxSlope;
+        const above = h - liquid, inBand = d.heightBand ? above >= d.heightBand[0] && above <= d.heightBand[1] : above > 0.25;
+        const ok = inBand && (x * x + z * z) > 160 && slopeAt(x, z) < d.maxSlope;
         if (!ok) { d.meshes.forEach((im) => im.setMatrixAt(id, zero)); continue; }
         if (d.spire) sc.set(1.2 + r1 * 2.4, 7 + r2 * 18, 1.2 + r1 * 2.2);
         else if (d.squash) sc.set(s * (0.8 + r1 * 0.6), s * (0.5 + r2 * 0.5), s * (0.8 + r2 * 0.6));
@@ -3649,7 +4310,326 @@ function renderJournal() {
       + '<span class="' + (d ? 'text-slate-200' : 'text-slate-400') + '">' + o.label + '</span></div>';
   }).join('');
   if (HUD.cache.get('journalList') !== html) { HUD.cache.set('journalList', html); $('journalList').innerHTML = html; }
-  HUD.text('journalFoot', World.surveyDone ? 'Survey complete · thanks for playing' : World.glyphs.size + '/3 glyphs decoded · J to close');
+  HUD.text('journalFoot', World.surveyDone ? 'Survey complete · thanks for playing' : World.glyphs.size + '/' + WILD.length + ' glyphs decoded · J to close');
+}
+/* ---------------- system map (N) ---------------- */
+let mapOpen = false;
+const MAP_COL = { desert: '#e8b46c', lush: '#62d68e', cityA: '#ffd27a', ocean: '#44c8e8', toxic: '#ff7a3c', cityN: '#ff4fb8',
+  biolum: '#9b72ff', giant: '#c0a8ff', ice: '#c4e9ff', prism: '#ff9ce9' };
+const MAP_BLURB = {
+  sahri: 'Scorched dunes, wind-cut arches and bone-white spires.',
+  eden: 'Mild, green and alive. Your voyage began here.',
+  aurelia: 'The ultra-wealthy capital of the Expanse: gilded spires, sky gardens and private docks.',
+  thalassa: 'A turquoise ocean scattered with small sandy islands.',
+  vharun: 'A toxic wasteland of sulphur flats and ember storms.',
+  noctis: 'A lawless megacity under a permanent neon night.',
+  umbra: 'A twilight jungle lit only by its own glowing flora.',
+  okara: 'A ringed gas giant with no solid surface.',
+  kryo: 'The frozen moon of Okara Major.',
+  crysalis: 'A prismatic anomaly of living glass at the edge of the system.'
+};
+const pulseEtaFor = (d) => d / PULSE_SPEED + 3;
+const NavMap = { cv: $('navCanvas'), ctx: null, w: 0, h: 0, zoom: 1, panX: 0, panY: 0, sel: null, hover: null, down: null, hits: [], listAt: 0,
+  box: { x0: 0, y0: 0, x1: 0, y1: 0, cx: 0, cy: 0 } };
+NavMap.ctx = NavMap.cv.getContext('2d');
+function mapResize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  NavMap.w = window.innerWidth; NavMap.h = window.innerHeight;
+  NavMap.cv.width = Math.round(NavMap.w * dpr); NavMap.cv.height = Math.round(NavMap.h * dpr);
+  NavMap.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // the free area left of the info column (the whole width on narrow screens)
+  const side = $('navSide').getBoundingClientRect(), wide = side.left > NavMap.w * 0.45;
+  const B = NavMap.box;
+  B.x0 = 24; B.y0 = NavMap.w < 640 ? 120 : 100; B.x1 = wide ? side.left - 24 : NavMap.w - 24; B.y1 = NavMap.h - 40;
+  B.cx = (B.x0 + B.x1) / 2; B.cy = (B.y0 + B.y1) / 2;
+}
+function openMap() {
+  if (gameState !== GAME_STATE.SPACE_FLIGHT || !space || space.mode !== 'flight') { toast('The system map opens in flight', 'info'); return; }
+  if (journalOpen) toggleJournal();
+  mapOpen = true;
+  NavMap.sel = World.navTarget; NavMap.hover = null; NavMap.down = null; NavMap.listAt = 0;
+  HUD.show('navMap', true);
+  $('hud').style.visibility = 'hidden';
+  mapResize();
+  Input.keys.clear(); Input.left = false;
+  Input.releaseLock();   // the cursor is needed on the map; onLockChange skips the pause card while it's open
+  Sound.ui();
+  drawMap();
+}
+function closeMap() {
+  if (!mapOpen) return;
+  mapOpen = false;
+  NavMap.down = null;
+  HUD.show('navMap', false);
+  $('hud').style.visibility = '';
+  Input.take();
+  Sound.ui();
+  if (!Input.locked && !Input.fallback && inPlay()) {
+    Input.requestLock();
+    // Esc carries no user activation, so the browser may refuse the lock: fall back to the pause card
+    setTimeout(() => { if (!mapOpen && !Input.locked && !Input.fallback && !paused && inPlay()) Input.onLockChange(false); }, 350);
+  }
+}
+function setCourse(id) {
+  if (World.navTarget !== id) {
+    World.navTarget = id;
+    toast('Course set · ' + BODY[id].name, 'good');
+    Save.write();
+  }
+  Sound.ui();
+}
+function mapPick(x, y) {
+  let best = null, bd = 1e9;
+  for (const h of NavMap.hits) {
+    const d = Math.hypot(h.x - x, h.y - y);
+    if (d < h.r + 12 && d < bd) { bd = d; best = h.id; }
+  }
+  return best;
+}
+NavMap.cv.addEventListener('mousedown', (e) => { if (e.button === 0) NavMap.down = { x: e.clientX, y: e.clientY, px: NavMap.panX, py: NavMap.panY, moved: false }; });
+NavMap.cv.addEventListener('mousemove', (e) => {
+  const d = NavMap.down;
+  if (d) {
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (d.moved || Math.hypot(dx, dy) > 5) { d.moved = true; NavMap.panX = d.px + dx; NavMap.panY = d.py + dy; }
+  }
+  NavMap.hover = mapPick(e.clientX, e.clientY);
+  NavMap.cv.style.cursor = d && d.moved ? 'grabbing' : NavMap.hover ? 'pointer' : 'grab';
+});
+NavMap.cv.addEventListener('mouseleave', () => { NavMap.hover = null; });
+window.addEventListener('mouseup', (e) => {
+  const d = NavMap.down;
+  NavMap.down = null;
+  if (!d || d.moved || !mapOpen) return;
+  const id = mapPick(e.clientX, e.clientY);
+  if (id && id !== NavMap.sel) { NavMap.sel = id; NavMap.listAt = 0; Sound.ui(); }
+});
+NavMap.cv.addEventListener('dblclick', (e) => {
+  const id = mapPick(e.clientX, e.clientY);
+  if (id) { setCourse(id); closeMap(); }
+  else { NavMap.zoom = 1; NavMap.panX = 0; NavMap.panY = 0; }
+});
+NavMap.cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const z0 = NavMap.zoom, z1 = clamp(z0 * Math.exp(-e.deltaY * 0.0016), 1, 80);
+  const ax = e.clientX - NavMap.box.cx, ay = e.clientY - NavMap.box.cy;   // keep the point under the cursor fixed
+  NavMap.panX = ax - (ax - NavMap.panX) * (z1 / z0);
+  NavMap.panY = ay - (ay - NavMap.panY) * (z1 / z0);
+  NavMap.zoom = z1;
+}, { passive: false });
+$('navList').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-id]');
+  if (!row) return;
+  NavMap.sel = row.dataset.id; NavMap.listAt = 0;
+  const h = NavMap.hits.find((x) => x.id === NavMap.sel);   // bring it on screen when zoomed in
+  if (h && NavMap.zoom > 1.01) { NavMap.panX += NavMap.box.cx - h.x; NavMap.panY += NavMap.box.cy - h.y; }
+  Sound.ui();
+});
+$('navSetCourse').addEventListener('click', () => { if (NavMap.sel) setCourse(NavMap.sel); closeMap(); });
+$('navClose').addEventListener('click', closeMap);
+
+function mapRing(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); }
+function drawMap() {
+  if (!space || !mapOpen) return;
+  const d = space.mapData(), ctx = NavMap.ctx, W = NavMap.w, H = NavMap.h, now = performance.now() / 1000;
+  if (NavMap.zoom <= 1.001 && !NavMap.down) { NavMap.panX *= 0.8; NavMap.panY *= 0.8; }   // fully zoomed out: drift back to centre
+  // zoom 1 frames the sun, every world and the ship inside the free area
+  let bx0 = Math.min(0, d.ship.x), bx1 = Math.max(0, d.ship.x), bz0 = Math.min(0, d.ship.z), bz1 = Math.max(0, d.ship.z);
+  for (const o of d.bodies) { bx0 = Math.min(bx0, o.x); bx1 = Math.max(bx1, o.x); bz0 = Math.min(bz0, o.z); bz1 = Math.max(bz1, o.z); }
+  const B = NavMap.box, pad = 60;
+  const fit = Math.min((B.x1 - B.x0 - pad * 2) / Math.max(bx1 - bx0, 1), (B.y1 - B.y0 - pad * 2) / Math.max(bz1 - bz0, 1));
+  const sc = fit * NavMap.zoom;
+  const ox = B.cx + NavMap.panX - (bx0 + bx1) / 2 * sc, oy = B.cy + NavMap.panY - (bz0 + bz1) / 2 * sc;
+  // range of sun-centred radii that can touch the viewport, to skip off-screen circles
+  const nx = clamp(ox, 0, W) - ox, ny = clamp(oy, 0, H) - oy;
+  const rMin = Math.hypot(nx, ny), rMax = Math.hypot(Math.max(ox, W - ox), Math.max(oy, H - oy));
+  const visible = (r) => r + 2 >= rMin && r - 2 <= rMax;
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineWidth = 1;
+
+  // distance rings
+  const step = [2000, 5000, 10000, 20000, 50000, 100000, 200000].find((s) => s * sc >= 64) || 200000;
+  ctx.strokeStyle = 'rgba(120,160,230,0.07)';
+  ctx.fillStyle = 'rgba(150,175,215,0.38)';
+  ctx.font = '600 10px Orbitron, monospace';
+  ctx.textAlign = 'center';
+  // ring labels run along the line from the sun towards the middle of the view
+  const la = Math.atan2(B.cy - oy, B.cx - ox) + 0.12, lc = Math.cos(la), ls = Math.sin(la);
+  const inBox = (x, y) => x > B.x0 && x < B.x1 && y > B.y0 - 30 && y < B.y1;
+  for (let r = step, i = 0; r < BOUNDARY_WARN && i < 400; r += step, i++) {
+    const rp = r * sc;
+    if (!visible(rp)) continue;
+    mapRing(ctx, ox, oy, rp);
+    const tx = ox + lc * rp, ty = oy + ls * rp;
+    if (inBox(tx, ty)) ctx.fillText((r / 1000) + 'k', tx, ty - 3);
+  }
+  // heliopause
+  const bR = BOUNDARY_WARN * sc;
+  if (visible(bR)) {
+    ctx.save(); ctx.setLineDash([6, 8]); ctx.strokeStyle = 'rgba(255,90,110,0.42)'; mapRing(ctx, ox, oy, bR); ctx.restore();
+    const tx = ox + lc * bR, ty = oy + ls * bR;
+    if (inBox(tx, ty)) { ctx.fillStyle = 'rgba(255,120,135,0.65)'; ctx.fillText('HELIOPAUSE', tx, ty - 5); }
+  }
+
+  // screen positions; moons and asteroid fields are pushed off their parents so they stay legible
+  const P = {};
+  for (const o of d.bodies) if (!o.b.parent) P[o.b.id] = { x: ox + o.x * sc, y: oy + o.z * sc, o };
+  for (const o of d.bodies) {
+    if (!o.b.parent) continue;
+    const pa = P[o.b.parent], po = pa.o;
+    let dx = (o.x - po.x) * sc, dy = (o.z - po.z) * sc;
+    const L = Math.hypot(dx, dy) || 1, want = Math.max(L, 24);
+    dx *= want / L; dy *= want / L;
+    P[o.b.id] = { x: pa.x + dx, y: pa.y + dy, o, orbitPx: Math.max(o.b.orbit * sc, 24), side: dx >= 0 ? 1 : -1 };
+  }
+  const tgt = World.navTarget, tick = (now * 0.8) % 1;
+
+  // orbits
+  for (const o of d.bodies) {
+    const on = o.b.id === tgt;
+    ctx.strokeStyle = on ? 'rgba(79,242,255,0.32)' : 'rgba(140,170,230,0.14)';
+    if (o.b.parent) { const pa = P[o.b.parent]; mapRing(ctx, pa.x, pa.y, P[o.b.id].orbitPx); }
+    else if (visible(o.b.orbit * sc)) mapRing(ctx, ox, oy, o.b.orbit * sc);
+  }
+  // asteroid fields
+  for (const f of d.fields) {
+    const pa = P[f.f.near], po = pa.o;
+    let dx = (f.x - po.x) * sc, dy = (f.z - po.z) * sc;
+    const L = Math.hypot(dx, dy) || 1, want = Math.max(L, 36);
+    const fx = pa.x + dx * want / L, fy = pa.y + dy * want / L, fr = Math.max(f.f.radius * sc, 7);
+    if (fx < -fr || fx > W + fr || fy < -fr || fy > H + fr) continue;
+    ctx.save(); ctx.setLineDash([2, 4]); ctx.strokeStyle = 'rgba(214,196,160,0.42)'; mapRing(ctx, fx, fy, fr); ctx.restore();
+    ctx.fillStyle = 'rgba(214,196,160,0.55)';
+    const rnd = mulberry32(f.f.seed);
+    for (let i = 0; i < 9; i++) { const a = rnd() * TAU, rr = Math.sqrt(rnd()) * fr * 0.8; ctx.fillRect(fx + Math.cos(a) * rr - 0.75, fy + Math.sin(a) * rr - 0.75, 1.5, 1.5); }
+    if (NavMap.zoom >= 2.2) { ctx.font = '600 11px Rajdhani, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(f.f.name, fx, fy + fr + 13); }
+  }
+  // the sun
+  const sr = Math.max(SUN_RADIUS * sc, 4.5), gr = Math.max(sr * 3.2, 18);
+  if (ox > -gr && ox < W + gr && oy > -gr && oy < H + gr) {
+    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, gr);
+    g.addColorStop(0, 'rgba(255,214,140,0.85)'); g.addColorStop(0.3, 'rgba(255,170,80,0.32)'); g.addColorStop(1, 'rgba(255,150,60,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, gr, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff3cf'; ctx.beginPath(); ctx.arc(ox, oy, sr, 0, TAU); ctx.fill();
+  }
+
+  // course line from the ship to the target
+  const sx = ox + d.ship.x * sc, sy = oy + d.ship.z * sc, T = P[tgt];
+  if (T) {
+    ctx.save();
+    ctx.setLineDash([5, 6]); ctx.lineDashOffset = -now * 18;
+    ctx.strokeStyle = 'rgba(79,242,255,0.6)'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(T.x, T.y); ctx.stroke();
+    ctx.restore();
+    const len = Math.hypot(T.x - sx, T.y - sy);
+    if (len > 150) {
+      const mx = (sx + T.x) / 2, my = (sy + T.y) / 2;
+      const txt = fmtDist(T.o.dist) + ' · pulse ' + fmtEta(pulseEtaFor(T.o.dist));
+      ctx.font = '700 11px Orbitron, monospace'; ctx.textAlign = 'center';
+      const tw = ctx.measureText(txt).width;
+      ctx.fillStyle = 'rgba(3,6,14,0.78)'; ctx.fillRect(mx - tw / 2 - 7, my - 11, tw + 14, 19);
+      ctx.fillStyle = '#9ff8ff'; ctx.fillText(txt, mx, my + 3);
+    }
+  }
+
+  // bodies
+  NavMap.hits.length = 0;
+  for (const o of d.bodies) {
+    const b = o.b, p = P[b.id], col = MAP_COL[b.type] || '#cfd8ea';
+    const ir = Math.max(3 + b.radius / 600, b.radius * sc);
+    NavMap.hits.push({ id: b.id, x: p.x, y: p.y, r: ir });
+    if (p.x < -ir - 160 || p.x > W + ir + 160 || p.y < -ir - 40 || p.y > H + ir + 40) continue;
+    const known = World.discovered.has(b.id) || b.city || !b.landable;
+    if (b.type === 'giant') {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(-0.35); ctx.scale(1, 0.32);
+      ctx.strokeStyle = 'rgba(214,200,255,0.55)'; ctx.lineWidth = Math.max(1.2, ir * 0.18); mapRing(ctx, 0, 0, ir * 1.95);
+      ctx.restore();
+    }
+    const g = ctx.createRadialGradient(p.x - ir * 0.35, p.y - ir * 0.35, ir * 0.1, p.x, p.y, ir);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.25, col); g.addColorStop(1, 'rgba(10,14,28,0.95)');
+    ctx.globalAlpha = known ? 1 : 0.7;
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, ir, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+    if (b.city) { ctx.strokeStyle = col; ctx.globalAlpha = 0.7; mapRing(ctx, p.x, p.y, ir + 3.5); ctx.globalAlpha = 1; }
+    if (b.id === tgt) {
+      ctx.save(); ctx.strokeStyle = '#4ff2ff'; ctx.lineWidth = 1.5;
+      const rr = ir + 8 + Math.sin(now * 3) * 1.2, c = rr * 0.5;
+      for (let q = 0; q < 4; q++) {   // corner brackets
+        const sxq = q & 1 ? 1 : -1, syq = q & 2 ? 1 : -1;
+        ctx.beginPath(); ctx.moveTo(p.x + sxq * rr, p.y + syq * (rr - c)); ctx.lineTo(p.x + sxq * rr, p.y + syq * rr); ctx.lineTo(p.x + sxq * (rr - c), p.y + syq * rr); ctx.stroke();
+      }
+      ctx.globalAlpha = 0.5 * (1 - tick); mapRing(ctx, p.x, p.y, ir + 4 + tick * 18);
+      ctx.restore();
+    }
+    if (b.id === NavMap.sel && b.id !== tgt) { ctx.strokeStyle = 'rgba(79,242,255,0.85)'; ctx.lineWidth = 1.5; mapRing(ctx, p.x, p.y, ir + 5); ctx.lineWidth = 1; }
+    if (b.id === NavMap.hover) { ctx.strokeStyle = 'rgba(255,255,255,0.75)'; mapRing(ctx, p.x, p.y, ir + 6.5); }
+    // label (moons label away from their parent)
+    const left = p.side === -1, lx = p.x + (left ? -1 : 1) * (ir + 8);
+    ctx.textAlign = left ? 'right' : 'left';
+    ctx.font = '700 13px Rajdhani, sans-serif';
+    ctx.fillStyle = b.city ? col : known ? 'rgba(232,240,255,0.95)' : 'rgba(200,212,235,0.7)';
+    ctx.fillText(b.name, lx, p.y + 4);
+    if (NavMap.zoom >= 1.6 || b.id === NavMap.hover || b.id === NavMap.sel || b.id === tgt) {
+      ctx.font = '600 10.5px Rajdhani, sans-serif'; ctx.fillStyle = 'rgba(150,172,210,0.75)';
+      ctx.fillText((b.klass + (known ? '' : ' · uncharted')).toUpperCase(), lx, p.y + 17);
+    }
+  }
+
+  // the ship (an edge arrow when it's panned off screen)
+  const ha = Math.atan2(d.ship.hz, d.ship.hx), M = 22;
+  const off = sx < M || sx > W - M || sy < M || sy > H - M;
+  ctx.save();
+  if (off) {
+    const ex = clamp(sx, M, W - M), ey = clamp(sy, M, H - M), a = Math.atan2(sy - ey, sx - ex);
+    ctx.translate(ex, ey); ctx.rotate(a);
+    ctx.fillStyle = '#4ff2ff'; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -7); ctx.lineTo(-2, 0); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill();
+  } else {
+    ctx.translate(sx, sy);
+    ctx.strokeStyle = 'rgba(79,242,255,0.45)'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(ha) * 30, Math.sin(ha) * 30); ctx.stroke();
+    ctx.rotate(ha);
+    ctx.shadowColor = 'rgba(79,242,255,0.9)'; ctx.shadowBlur = 10;
+    ctx.fillStyle = '#4ff2ff'; ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-6, -5.5); ctx.lineTo(-3, 0); ctx.lineTo(-6, 5.5); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  if (!off && !NavMap.hits.some((h) => Math.hypot(h.x - sx, h.y - sy) < h.r + 26)) {
+    ctx.font = '700 10px Orbitron, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(159,248,255,0.85)'; ctx.fillText('YOU', sx, sy - 13);
+  }
+
+  ctx.textAlign = 'center'; ctx.font = '600 10px Orbitron, monospace'; ctx.fillStyle = 'rgba(150,175,215,0.5)';
+  ctx.fillText('RING SPACING ' + (step / 1000) + 'K U  ·  ZOOM ' + NavMap.zoom.toFixed(1) + '×', B.cx, H - 16);
+
+  if (performance.now() - NavMap.listAt > 250) { NavMap.listAt = performance.now(); renderMapPanels(d); }
+}
+function renderMapPanels(d) {
+  const tgt = World.navTarget;
+  const rows = d.bodies.slice().sort((a, b) => a.dist - b.dist).map((o) => {
+    const b = o.b, on = b.id === tgt, sel = b.id === NavMap.sel;
+    return '<button data-id="' + b.id + '" class="w-full flex items-center gap-3 px-2 py-[6px] rounded-md text-left ' + (sel ? 'bg-white/[.08]' : 'hover:bg-white/[.04]') + '">'
+      + '<span class="w-[9px] h-[9px] rounded-full shrink-0" style="background:' + MAP_COL[b.type] + '"></span>'
+      + '<span class="flex-1 min-w-0"><span class="block text-[14.5px] font-bold leading-5 truncate ' + (on ? 'text-cy' : 'text-slate-100') + '">' + (on ? '▸ ' : '') + b.name + '</span>'
+      + '<span class="block text-[10.5px] font-bold tracking-[.14em] uppercase text-slate-500 truncate">' + b.klass + '</span></span>'
+      + '<span class="mono text-[11px] text-slate-300 shrink-0">' + fmtDist(o.dist) + '</span></button>';
+  }).join('');
+  const listHtml = '<div class="lbl mb-2 px-2">Worlds · nearest first</div>' + rows;
+  if (HUD.cache.get('navList') !== listHtml) { HUD.cache.set('navList', listHtml); $('navList').innerHTML = listHtml; }
+
+  const id = NavMap.sel;
+  HUD.show('navInfo', !!id);
+  if (!id) return;
+  const b = BODY[id], o = d.bodies.find((x) => x.b.id === id);
+  HUD.text('navInfoClass', b.klass + (b.lawless ? ' · lawless' : ''));
+  HUD.text('navInfoName', b.name);
+  const row = (k, v, c) => '<div class="flex justify-between gap-4"><span class="text-slate-400">' + k + '</span><span class="' + (c || 'text-white') + '">' + v + '</span></div>';
+  const tick = (on) => (on ? '<span class="text-am">✓ done</span>' : '<span class="text-slate-500">pending</span>');
+  let html = '<div class="text-slate-300 mb-3">' + MAP_BLURB[id] + '</div>'
+    + row('Distance', fmtDist(o.dist), 'mono text-[12px] text-white')
+    + row('Pulse ETA', o.dist > 12000 ? fmtEta(pulseEtaFor(o.dist)) : 'in range', 'mono text-[12px] text-cy');
+  if (b.parent) html += row('Orbits', BODY[b.parent].name);
+  if (b.city) html += row('Docking', 'next update', 'text-slate-500');
+  else if (!b.landable) html += row('Orbital survey', tick(World.surveyed.has(id)));
+  else html += row('Landed', tick(World.discovered.has(id))) + row('Waystone', tick(World.glyphs.has(id)));
+  if (HUD.cache.get('navInfoBody') !== html) { HUD.cache.set('navInfoBody', html); $('navInfoBody').innerHTML = html; }
+  HUD.text('navSetCourse', id === tgt ? 'Current course · close map' : 'Set course · ' + b.name);
 }
 /* intro: what a returning player has saved, plus a two-click reset */
 function renderSaveLine() {
@@ -3784,18 +4764,29 @@ function refuel() {
 Input.onPress = (code) => {
   if (gameState === GAME_STATE.INTRO || paused) return;
   if (code === 'KeyM') { Sound.toggleMute(); toast(Sound.muted ? 'Audio muted' : 'Audio on', 'info'); }
+  if (mapOpen) {
+    if (code === 'KeyN' || code === 'Escape') closeMap();
+    if (code === 'Tab') { NavMap.sel = BODIES[(BODIES.findIndex((b) => b.id === NavMap.sel) + 1) % BODIES.length].id; NavMap.listAt = 0; Sound.ui(); }
+    if (code === 'Enter' && NavMap.sel) { setCourse(NavMap.sel); closeMap(); }
+    return;
+  }
   if (code === 'KeyJ') toggleJournal();
+  if (code === 'KeyN') openMap();
   if (code === 'KeyF' && (gameState === GAME_STATE.SPACE_FLIGHT || gameState === GAME_STATE.GROUND_EXPLORATION)) refuel();
   if (gameState === GAME_STATE.SPACE_FLIGHT) {
     if (code === 'KeyE') {
-      if (lastTel.landable) beginLanding(lastTel.landable);
+      if (lastTel.landable && lastTel.landable.city) { toast(lastTel.landable.name + ': city districts open in the next update', 'info'); Sound.deny(); }
+      else if (lastTel.landable) beginLanding(lastTel.landable);
       else if (lastTel.giantClose) { toast(lastTel.nearest.name + ' has no solid surface', 'warn'); Sound.deny(); }
       else { toast('Too far from a planet to enter its atmosphere', 'warn'); Sound.deny(); }
     }
     if (code === 'Tab') {
-      World.targetIdx = World.targetIdx + 1 >= BODIES.length ? -1 : World.targetIdx + 1;
+      const ids = BODIES.map((b) => b.id);
+      World.navTarget = ids[(ids.indexOf(World.navTarget) + 1) % ids.length];
+      toast('Target · ' + BODY[World.navTarget].name, 'info');
       Sound.ui();
     }
+    if (code === 'Space') { const msg = space.togglePulse(); if (msg) toast(msg, 'info'); }
   } else if (gameState === GAME_STATE.GROUND_EXPLORATION) {
     if (code === 'KeyE' && lastTel.nearShip) {
       if (World.fuel >= 10) beginLaunch();
@@ -3821,7 +4812,7 @@ Input.onPress = (code) => {
 function inPlay() { return gameState === GAME_STATE.SPACE_FLIGHT || gameState === GAME_STATE.GROUND_EXPLORATION || gameState === GAME_STATE.ATMOSPHERE_TRANSITION; }
 Input.onLockChange = (locked) => {
   if (locked) { paused = false; $('pause').style.opacity = '0'; $('pause').style.pointerEvents = 'none'; $('pauseHint').textContent = 'Click to resume'; }
-  else if (inPlay() && !Input.fallback) { paused = true; $('pause').style.opacity = '1'; $('pause').style.pointerEvents = 'auto'; }
+  else if (inPlay() && !Input.fallback && !mapOpen) { paused = true; $('pause').style.opacity = '1'; $('pause').style.pointerEvents = 'auto'; }
 };
 Input.onLockError = () => { if (paused) $('pauseHint').textContent = 'The browser needs a moment. Click again to resume'; };
 $('pause').addEventListener('click', () => { Sound.init(); Input.requestLock(); if (Input.fallback) Input.onLockChange(true); });
@@ -3842,15 +4833,22 @@ function hudShared() {
 }
 function hudSpace(tel) {
   const cam = space.camera;
-  HUD.text('spdVal', String(Math.round(tel.speed)));
-  HUD.bar('spdBar', tel.speed / 780);
-  HUD.cls('spdBar', 'warm', tel.boostAmt > 0.3);
-  HUD.text('cX', tel.pos.x.toFixed(0)); HUD.text('cY', tel.pos.y.toFixed(0)); HUD.text('cZ', tel.pos.z.toFixed(0));
-  const tb = World.targetIdx >= 0 ? BODIES[World.targetIdx] : tel.nearest;
-  const tpos = space.bodyWorldPos(tb.id);
-  const dist = Math.max(0, tel.pos.distanceTo(tpos) - tb.radius);
+  const pulsing = tel.pulse === 'on';
+  HUD.text('spdVal', tel.speed >= 10000 ? (tel.speed / 1000).toFixed(1) + 'k' : String(Math.round(tel.speed)));
+  HUD.bar('spdBar', pulsing ? tel.speed / PULSE_SPEED : tel.speed / 780);
+  HUD.cls('spdBar', 'warm', tel.boostAmt > 0.3 || pulsing);
+  const tp = tel.truePos;
+  HUD.text('cX', (tp.x / 1000).toFixed(1) + 'k'); HUD.text('cY', (tp.y / 1000).toFixed(1) + 'k'); HUD.text('cZ', (tp.z / 1000).toFixed(1) + 'k');
+  HUD.show('pulseBadge', tel.pulse !== 'off');
+  if (tel.pulse !== 'off') HUD.text('pulseBadge', tel.pulse === 'spool' ? 'PULSE CHARGING · ' + Math.round(tel.pulseN * 100) + '%' : 'PULSE DRIVE ENGAGED');
+  if (tel.pulseNote) toast(tel.pulseNote, 'info');
+  const nav = tel.nav || { b: tel.nearest, dist: tel.nearestSurf, pulseEta: tel.nearestSurf / PULSE_SPEED };
+  const tb = nav.b, dist = nav.dist;
+  const tpos = space.bodyRenderPos(tb.id);
   HUD.text('tgtName', tb.name); HUD.text('tgtClass', tb.klass); HUD.text('tgtDist', fmtDist(dist));
-  HUD.text('tgtSys', World.targetIdx >= 0 ? 'Target locked · Halcyon' : 'Nearest body · Halcyon');
+  HUD.text('tgtSys', pulsing ? 'Arriving in ' + fmtEta(dist / Math.max(tel.speed, 1))
+    : dist > 30000 ? 'Pulse ETA ' + fmtEta(nav.pulseEta) + ' · Q align · Space pulse'
+    : tel.speed > 30 ? 'ETA ' + fmtEta(dist / tel.speed) + ' · N map' : 'Q align · N map');
   const s = toScreen(tpos, cam);
   const margin = 40, onScreen = !s.behind && s.x > margin && s.x < s.w - margin && s.y > margin && s.y < s.h - margin;
   HUD.show('tgtMarker', onScreen); HUD.show('tgtArrow', !onScreen);
@@ -3874,7 +4872,7 @@ function hudSpace(tel) {
   if (tel.reward) toast('+' + tel.reward + ' Carbon · asteroid', 'good');
   if (tel.noFuel && !fuelWarned) { fuelWarned = true; toast('Fuel depleted — emergency thrusters only. Press F to refuel', 'warn'); }
   HUD.cls('crosshair', 'hit', !!tel.aimRock);
-  if (tel.landable) setPrompt('<span class="key">E</span>Enter atmosphere · ' + tel.landable.name);
+  if (tel.landable) setPrompt(tel.landable.city ? tel.landable.name + ' · docking clearance pending' : '<span class="key">E</span>Enter atmosphere · ' + tel.landable.name);
   else if (tel.giantClose) setPrompt(tel.nearest.name + ' · gas giant · no landing zone');
   else setPrompt(null);
 }
@@ -3959,7 +4957,8 @@ function tick(dtMs, now) {
   if (!paused) {
     scanCool = Math.max(0, scanCool - dt);
     if (gameState === GAME_STATE.ATMOSPHERE_TRANSITION) updateTransition(dt);
-    else if (active) lastTel = active.update(dt, gameState !== GAME_STATE.INTRO);
+    else if (active) lastTel = active.update(dt, gameState !== GAME_STATE.INTRO && !mapOpen);
+    if (mapOpen) { if (gameState !== GAME_STATE.SPACE_FLIGHT) closeMap(); else drawMap(); }
     if (gameState === GAME_STATE.SPACE_FLIGHT) surveySpace(lastTel);
     if (gameState !== GAME_STATE.INTRO && (saveClock += dt) > 5) { saveClock = 0; Save.write(); }
   }
@@ -3983,7 +4982,7 @@ function onResize() {
     if (s.vmCamera) { s.vmCamera.aspect = s.camera.aspect; s.vmCamera.updateProjectionMatrix(); }
   });
 }
-window.addEventListener('resize', onResize);
+window.addEventListener('resize', () => { onResize(); if (mapOpen) mapResize(); });
 canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); fatal('The GPU context was lost. Reload the page to continue.'); });
 
 /* =====================================================================
@@ -4014,6 +5013,7 @@ function boot() {
     setTimeout(() => toast('Flight systems online · fly to a planet and press E', 'info'), 900);
     if (restored && surveyCount()) setTimeout(() => toast('Voyage restored · survey ' + surveyCount() + '/' + SURVEY.length + ' · J for the log', 'good'), 1800);
     else setTimeout(() => toast('Goal: survey the Halcyon System · J for the log', 'info'), 1800);
+    setTimeout(() => toast('N opens the system map · Space engages the pulse drive', 'info'), 3600);
   });
 }
 try { boot(); } catch (e) { console.error(e); fatal('Voidwake failed to start: ' + (e && e.message ? e.message : e)); }
