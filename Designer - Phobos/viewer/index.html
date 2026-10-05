@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phobos Model Viewer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%2305070e' stroke='%234ff2ff' stroke-width='3'/%3E%3Ccircle cx='20' cy='12' r='4' fill='%23ff3ea5'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&display=swap">
+<style>
+:root{--ink:#05070e;--panel:#0b1120;--line:rgba(130,170,220,.17);--cyan:#4ff2ff;--mag:#ff3ea5;--amber:#ffb347;--danger:#ff4d5e;--text:#dbe7ff;--dim:#8094bb;--faint:#56688d}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ink);color:var(--text);font-family:'Rajdhani',system-ui,sans-serif;overflow:hidden}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas:active{cursor:grabbing}
+.panel{position:fixed;top:16px;left:16px;width:280px;max-width:calc(100vw - 32px);background:rgba(11,17,32,.82);
+  border:1px solid var(--line);border-radius:10px;padding:14px 16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+h1{font:900 14px/1 'Orbitron',monospace;letter-spacing:.12em;margin:0 0 4px;
+  background:linear-gradient(100deg,var(--cyan) 10%,#a9c7ff 48%,var(--mag) 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{font:700 10px/1 'Rajdhani';letter-spacing:.32em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+label{display:block;font:700 10px/1 'Rajdhani';letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:10px 0 5px}
+select,button{font:600 14px 'Rajdhani';color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+select{width:100%}
+button{cursor:pointer}
+button:hover,select:hover{border-color:rgba(79,242,255,.45)}
+button[aria-pressed=true]{border-color:var(--cyan);color:var(--cyan)}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+.stats{display:grid;grid-template-columns:1fr auto;gap:3px 10px;font:600 13px 'Rajdhani';margin-top:4px}
+.stats b{font:700 13px 'Orbitron',monospace;color:var(--text);text-align:right}
+.stats b.over{color:var(--danger)}
+.meta{font:500 13px/1.45 'Rajdhani';color:var(--dim);margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.err{color:var(--danger)}
+@media (max-width:600px){.panel{top:auto;bottom:16px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="panel">
+  <h1>PHOBOS VIEWER</h1>
+  <div class="sub">Model review bench</div>
+  <label for="asset">Asset</label>
+  <select id="asset"></select>
+  <label>View</label>
+  <div class="row">
+    <button data-view="three-quarter">¾</button><button data-view="front">Front</button>
+    <button data-view="side">Side</button><button data-view="top">Top</button>
+  </div>
+  <label>Toggles</label>
+  <div class="row">
+    <button id="spin" aria-pressed="true">Turntable</button>
+    <button id="wire" aria-pressed="false">Wire</button>
+    <button id="sil" aria-pressed="false">Silhouette</button>
+    <button id="bg">Background</button>
+    <button id="shot">PNG</button>
+  </div>
+  <label>Budget</label>
+  <div class="stats" id="stats"></div>
+  <div class="meta" id="meta"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../assets/manifest.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+if (typeof THREE === 'undefined') { $('meta').innerHTML = '<span class="err">three.js failed to load from cdnjs.</span>'; return; }
+
+const BUDGET = { hero: { tris: 6000, calls: 8, materials: 5 }, actor: { tris: 1500, calls: 3, materials: 3 }, prop: { tris: 400, calls: 1, materials: 1 } };
+const BGS = ['#05070e', '#3a4152', '#d9dee8'];
+
+const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.LinearEncoding;   // match the games (both render linear, no tone mapping)
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 500);
+
+scene.add(new THREE.HemisphereLight('#a9c7ff', '#1a1020', 0.55));
+const key = new THREE.DirectionalLight('#ffffff', 1.1); key.position.set(4, 6, 3); scene.add(key);
+const rim = new THREE.DirectionalLight('#ff3ea5', 0.7); rim.position.set(-5, 2, -4); scene.add(rim);
+const fill = new THREE.DirectionalLight('#4ff2ff', 0.35); fill.position.set(-3, -1, 5); scene.add(fill);
+const grid = new THREE.GridHelper(10, 20, 0x2a3654, 0x141c30); scene.add(grid);
+
+let bgIdx = 0, current = null, currentDef = null, radius = 3, spin = true, wire = false, sil = false;
+const orbit = { theta: Math.PI * 0.25, phi: Math.PI * 0.36, dist: 3, target: new THREE.Vector3() };
+const silMat = new THREE.MeshBasicMaterial({ color: '#000000' });
+
+function setBg(i) { bgIdx = i; scene.background = new THREE.Color(BGS[i]); grid.visible = !sil; }
+function placeCamera() {
+  const { theta, phi, dist, target } = orbit;
+  camera.position.set(target.x + dist * Math.sin(phi) * Math.sin(theta), target.y + dist * Math.cos(phi), target.z + dist * Math.sin(phi) * Math.cos(theta));
+  camera.lookAt(target);
+}
+function view(name) {
+  const v = { 'three-quarter': [Math.PI * 0.25 + Math.PI, 1.1], front: [Math.PI, Math.PI / 2], side: [Math.PI / 2, Math.PI / 2], top: [0, 0.001] }[name];
+  if (!v) return; orbit.theta = v[0]; orbit.phi = v[1]; orbit.dist = radius * 4.2; setSpin(false);
+}
+function setSpin(b) { spin = b; $('spin').setAttribute('aria-pressed', b); }
+
+function traverseMeshes(fn) { current && current.traverse(o => { if (o.isMesh) fn(o); }); }
+function applyModes() {
+  traverseMeshes(o => {
+    if (!o.userData.mat) o.userData.mat = o.material;
+    o.material = sil ? silMat : o.userData.mat;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m !== silMat) m.wireframe = wire; });
+  });
+  if (sil) { scene.background = new THREE.Color('#ffffff'); grid.visible = false; } else setBg(bgIdx);
+}
+
+function stats() {
+  let tris = 0, meshes = 0; const mats = new Set(), geos = new Set();
+  traverseMeshes(o => {
+    meshes++; geos.add(o.geometry);
+    (Array.isArray(o.userData.mat || o.material) ? (o.userData.mat || o.material) : [o.userData.mat || o.material]).forEach(m => mats.add(m));
+    const g = o.geometry, n = g.index ? g.index.count : g.attributes.position.count;
+    tris += (n / 3) * (o.isInstancedMesh ? o.count : 1);
+  });
+  return { tris: Math.round(tris), calls: meshes, meshes, materials: mats.size, geometries: geos.size };
+}
+function renderStats() {
+  const s = stats(), b = BUDGET[currentDef?.meta?.budget] || {};
+  const row = (k, label) => `<span>${label}${b[k] ? ` <span style="color:var(--faint)">/ ${b[k]}</span>` : ''}</span><b class="${b[k] && s[k] > b[k] ? 'over' : ''}">${s[k].toLocaleString()}</b>`;
+  $('stats').innerHTML = row('tris', 'Triangles') + row('calls', 'Draw calls') + row('materials', 'Materials') + `<span>Geometries</span><b>${s.geometries}</b>`;
+  return s;
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); });
+}
+
+function load(id, opts = {}) {
+  const def = (window.PHOBOS_ASSETS || {})[id];
+  if (!def) { $('meta').innerHTML = `<span class="err">Unknown asset "${id}"</span>`; return null; }
+  if (current) scene.remove(current);
+  currentDef = def; current = def.build(THREE, opts); scene.add(current);
+  current.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(current), size = box.getSize(new THREE.Vector3());
+  radius = Math.max(size.x, size.y, size.z) * 0.5 || 1;
+  orbit.target.copy(box.getCenter(new THREE.Vector3())); orbit.dist = radius * 4.2;
+  grid.position.y = box.min.y;
+  const m = def.meta || {};
+  $('meta').innerHTML = `<b style="color:var(--text)">${m.name || id}</b> · v${m.version || '?'} · ${m.scope || ''} · budget <b style="color:var(--amber)">${m.budget || '—'}</b><br>`
+    + `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m<br>${m.scale || ''}`
+    + (m.palette ? `<div class="row" style="margin-top:6px">${m.palette.map(c => `<span title="${c}" style="width:18px;height:18px;border-radius:4px;border:1px solid var(--line);background:${c}"></span>`).join('')}</div>` : '');
+  $('asset').value = id; applyModes(); renderStats();
+  history.replaceState(null, '', '?asset=' + encodeURIComponent(id));
+  return renderStats();
+}
+
+// Input: drag to orbit, wheel to zoom.
+let drag = null;
+$('c').addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; setSpin(false); $('c').setPointerCapture(e.pointerId); });
+$('c').addEventListener('pointermove', e => {
+  if (!drag) return;
+  orbit.theta -= (e.clientX - drag.x) * 0.008; orbit.phi = Math.min(Math.PI - 0.01, Math.max(0.01, orbit.phi - (e.clientY - drag.y) * 0.008));
+  drag = { x: e.clientX, y: e.clientY };
+});
+addEventListener('pointerup', () => drag = null);
+$('c').addEventListener('wheel', e => { e.preventDefault(); orbit.dist = Math.min(radius * 20, Math.max(radius * 0.8, orbit.dist * (1 + e.deltaY * 0.001))); }, { passive: false });
+
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => view(b.dataset.view));
+$('spin').onclick = () => setSpin(!spin);
+$('wire').onclick = () => { wire = !wire; $('wire').setAttribute('aria-pressed', wire); applyModes(); };
+$('sil').onclick = () => { sil = !sil; $('sil').setAttribute('aria-pressed', sil); applyModes(); };
+$('bg').onclick = () => { if (!sil) setBg((bgIdx + 1) % BGS.length); };
+$('shot').onclick = () => { const a = document.createElement('a'); a.href = png(); a.download = ($('asset').value || 'model') + '.png'; a.click(); };
+$('asset').onchange = e => load(e.target.value);
+
+function png() { renderer.render(scene, camera); return renderer.domElement.toDataURL('image/png'); }
+
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h;
+  if (w > 600) camera.setViewOffset(w, h, -150, 0, w, h); else camera.clearViewOffset();   // keep the model clear of the panel
+  camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.1), t = clock.elapsedTime;
+  if (spin) orbit.theta += dt * 0.5;
+  if (current && currentDef.update) currentDef.update(current, t, dt);
+  placeCamera(); renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+window.PHOBOS_VIEWER = { load, stats, view, png, silhouette: b => { sil = !!b; $('sil').setAttribute('aria-pressed', sil); applyModes(); }, renderer, scene, camera };
+
+setBg(0);
+Promise.allSettled((window.PHOBOS_MANIFEST || []).map(p => loadScript('../assets/' + p))).then(results => {
+  const failed = results.filter(r => r.status === 'rejected').map(r => r.reason.message);
+  const ids = Object.keys(window.PHOBOS_ASSETS || {});
+  $('asset').innerHTML = ids.map(id => `<option value="${id}">${(PHOBOS_ASSETS[id].meta || {}).name || id}</option>`).join('');
+  const want = new URLSearchParams(location.search).get('asset');
+  if (ids.length) load(ids.includes(want) ? want : ids[0]);
+  else $('meta').innerHTML = '<span class="err">No assets in manifest.</span>';
+  if (failed.length) $('meta').innerHTML += `<br><span class="err">${failed.join('<br>')}</span>`;
+  frame();
+});
+})();
+</script>
+</body>
+</html>

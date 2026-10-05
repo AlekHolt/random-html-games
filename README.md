@@ -26,6 +26,8 @@ open the file and it plays. Everything is generated at runtime in code.
 random-html-games/
 ├── index.html          ← landing page listing every game
 ├── LICENSE
+├── Game Tester - Helios/  ← QA agent: reviews, bug IDs, test requests
+├── Designer - Phobos/     ← design agent: style guide, 3D models, model viewer, design requests
 └── <game-name>/
     ├── index.html      ← the entire game, one file
     ├── README.md       ← controls, how it works
