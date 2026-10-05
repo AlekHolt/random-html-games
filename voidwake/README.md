@@ -36,9 +36,9 @@ of three.js r128.
 | `Space` | Jump; hold to use the jetpack |
 | Hold left mouse | Mining beam (watch the heat gauge) |
 | `C` | Scanner pulse: tags every deposit within range |
-| `E` | Board the ship and launch to orbit (costs 10% fuel) |
+| `E` | Board the ship and launch to orbit (costs 10% fuel), or decode a waystone |
 
-`F` turns carbon into fuel anywhere: 1 C buys 2%, up to 20% per press, and you only pay for what fits
+`J` opens the survey log. `F` turns carbon into fuel anywhere: 1 C buys 2%, up to 20% per press, and you only pay for what fits
 in the tank. `M` mutes. `Esc` pauses, which silences the world and ducks the music.
 
 The system ends at an outer boundary about 5,000 u from the sun. Past the warning line, outward thrust
@@ -50,6 +50,25 @@ You start in orbit near **Eden Thalos**. Thrust drains the tank, and boost drain
 comes from asteroids in space and from crystals and monoliths on the surface, and it converts into
 fuel. Launching from a surface costs 10%, so on the ground you mine until you can afford to leave.
 An empty tank never strands you: emergency thrusters still give 20% thrust.
+
+### The Halcyon Survey
+
+The goal is to survey the whole system. Seven objectives are tracked in the HUD's **Survey Log**; press
+`J` for the full list:
+
+- Land on Eden Thalos, Vharun and Kryo-7.
+- On each, find and decode its **Ancient Waystone**, a glyph-carved obelisk with a gold light beacon that
+  stands 75–125 u from the landing site. The scanner (`C`) tags it, and `E` decodes it for +30 C and a
+  glyph word.
+- Survey **Okara Major** by flying into close orbit (+20 C). The gas giant can't be landed on, but it
+  counts.
+
+Completing all seven pays a +100 C bonus.
+
+**Progress saves automatically** in the browser (`localStorage`): carbon, fuel, worlds visited, glyphs,
+the survey and stats. It saves every few seconds, on every milestone, and when the tab closes. The
+title screen shows your saved voyage, and **New voyage** (click twice) erases it. A blocked, private or
+corrupt store just means a fresh start.
 
 The system has four landable or visible bodies:
 

@@ -162,6 +162,15 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
       <div id="heatBarWrap" class="bar warm mt-1"><i id="heatBar" style="transform:scaleX(0)"></i></div>
     </div>
     <div class="text-[12px] font-bold tracking-[.12em] text-slate-400 mt-3"><span class="key">F</span>Refuel: 1 C = 2% fuel</div>
+    <div class="flex justify-between items-center mt-3"><span class="lbl">Survey Log <span class="key ml-1 mr-0">J</span></span><span id="surveyVal" class="mono text-[12px] text-am">0/7</span></div>
+    <div class="bar warm mt-1"><i id="surveyBar" style="transform:scaleX(0)"></i></div>
+  </div>
+
+  <!-- survey journal (J) -->
+  <div id="journal" class="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 panel px-5 py-4 w-[min(310px,calc(100vw-32px))]" style="display:none">
+    <div class="lbl tracking-[.36em] text-am">Halcyon Survey</div>
+    <div id="journalList" class="mt-3 text-[14px] font-semibold leading-7 text-slate-300"></div>
+    <div id="journalFoot" class="lbl mt-3"></div>
   </div>
 
   <!-- bottom-right: control hints -->
@@ -179,9 +188,9 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
       <div><span class="key">Space</span>Jump / jetpack</div>
       <div><span class="key">Hold LMB</span>Mining beam</div>
       <div><span class="key">C</span>Scanner pulse</div>
-      <div><span class="key">E</span>Board ship &amp; launch</div>
+      <div><span class="key">E</span>Board ship · decode waystone</div>
     </div>
-    <div class="text-slate-500"><span class="key">M</span>Mute · <span class="key">Esc</span>Pause</div>
+    <div class="text-slate-500"><span class="key">J</span>Log · <span class="key">M</span>Mute · <span class="key">Esc</span>Pause</div>
   </div>
 
   <!-- centre widgets -->
@@ -272,6 +281,10 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
       <div><span class="key">E</span>Land / launch</div><div><span class="key">LMB</span>Mine</div>
     </div>
     <div id="touchNote" class="lbl mt-6 text-am/80" style="display:none">Needs a keyboard &amp; mouse</div>
+    <div id="saveLine" class="mt-6 text-[13px] font-semibold tracking-[.08em] text-slate-400" style="display:none">
+      <span id="saveText"></span>
+      <button id="newVoyage" class="ml-3 lbl text-slate-300 hover:text-white underline decoration-dotted underline-offset-4">New voyage</button>
+    </div>
   </div>
 </section>
 
@@ -738,6 +751,16 @@ const Sound = {
     this.tone(rising ? 60 : 140, dur, { slideTo: rising ? 160 : 45, vol: 0.25, attack: dur * 0.5 });
   },
   boost() { this.noiseBurst(0.9, { freq: 400, slideTo: 2400, q: 1.2, vol: 0.35, attack: 0.05 }); this.tone(90, 0.8, { slideTo: 220, vol: 0.2 }); },
+  // waystone decoded: a rising A-minor arpeggio over a low swell
+  glyph() {
+    [440, 523.25, 659.25, 880, 1046.5].forEach((f, i) => this.tone(f, 1.6, { type: 'triangle', vol: 0.09, delay: i * 0.11, verb: 0.7 }));
+    this.tone(110, 2.4, { vol: 0.16, attack: 0.6, verb: 0.5 });
+  },
+  // whole survey complete: a sustained Am9 chord
+  complete() {
+    [220, 261.63, 329.63, 392, 493.88].forEach((f, i) => this.tone(f, 4.5, { type: 'triangle', vol: 0.07, attack: 0.4 + i * 0.08, verb: 0.8 }));
+    this.pickup();
+  },
 
   /* per-frame mixing; p = { mode, paused, throttle, speedN, boost, wind, jet, laser } */
   update(p) {
@@ -1569,8 +1592,59 @@ function bodyPosition(body, t, out) {
 /* Shared world progress (persists across scene rebuilds) */
 const World = {
   time: 420, fuel: 100, carbon: 0, discovered: new Set(), targetIdx: -1, lastBody: 'eden',
+  glyphs: new Set(), surveyed: new Set(), surveyDone: false,
   stats: { mined: 0, asteroids: 0 }
 };
+
+/* Halcyon Survey, the voyage's goal: land on every world, decode each world's Ancient Waystone,
+   and survey the gas giant from close orbit */
+const GLYPH_WORDS = { eden: ['ASHRA', 'growth'], vharun: ['KHEL', 'ember'], kryo: ['VOSS', 'silence'] };
+const SURVEY = [
+  { label: 'Land on Eden Thalos', done: () => World.discovered.has('eden') },
+  { label: 'Decode the Eden Thalos waystone', done: () => World.glyphs.has('eden') },
+  { label: 'Land on Vharun', done: () => World.discovered.has('vharun') },
+  { label: 'Decode the Vharun waystone', done: () => World.glyphs.has('vharun') },
+  { label: 'Land on Kryo-7', done: () => World.discovered.has('kryo') },
+  { label: 'Decode the Kryo-7 waystone', done: () => World.glyphs.has('kryo') },
+  { label: 'Survey Okara Major from close orbit', done: () => World.surveyed.has('okara') }
+];
+const surveyCount = () => SURVEY.filter((o) => o.done()).length;
+
+/* Progress persists in localStorage. Every access is guarded: in a private window or with storage
+   blocked, the voyage simply isn't saved. */
+const Save = {
+  KEY: 'voidwake.save.v1',
+  load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(this.KEY) || 'null');
+      if (!d || d.v !== 1) return false;
+      const ids = (a) => (Array.isArray(a) ? a.filter((id) => BODIES.some((bd) => bd.id === id)) : []);   // own ids only (no __proto__ etc.)
+      World.carbon = Math.max(0, Math.floor(+d.carbon) || 0);
+      World.fuel = Number.isFinite(+d.fuel) ? clamp(+d.fuel, 0, 100) : 100;
+      ids(d.discovered).forEach((id) => World.discovered.add(id));
+      ids(d.glyphs).forEach((id) => World.glyphs.add(id));
+      ids(d.surveyed).forEach((id) => World.surveyed.add(id));
+      World.surveyDone = !!d.surveyDone;
+      if (d.stats) { World.stats.mined = d.stats.mined | 0; World.stats.asteroids = d.stats.asteroids | 0; }
+      return true;
+    } catch (e) { return false; }
+  },
+  write() {
+    try {
+      localStorage.setItem(this.KEY, JSON.stringify({
+        v: 1, carbon: World.carbon, fuel: Math.round(World.fuel * 10) / 10, surveyDone: World.surveyDone, stats: World.stats,
+        discovered: [...World.discovered], glyphs: [...World.glyphs], surveyed: [...World.surveyed]
+      }));
+    } catch (e) { /* storage unavailable: progress just isn't kept */ }
+  },
+  clear() { try { localStorage.removeItem(this.KEY); } catch (e) { /* storage unavailable */ } }
+};
+function resetVoyage() {
+  Object.assign(World, { fuel: 100, carbon: 0, surveyDone: false, targetIdx: -1 });
+  World.discovered.clear(); World.glyphs.clear(); World.surveyed.clear();
+  World.stats.mined = 0; World.stats.asteroids = 0;
+  Save.clear();
+}
 
 /* =====================================================================
    MODEL KIT: small helpers for the procedural hard-surface models below (Phobos).
@@ -3004,11 +3078,16 @@ function createGround(bodyId) {
 
   /* parked starship */
   const shipModel = buildShipModel(env);
-  const SHIP = new THREE.Vector3(7, 0, -12);
-  SHIP.y = H(SHIP.x, SHIP.z) + 2.5;
+  const SHIP = new THREE.Vector3(7, 0, -12), SHIP_YAW = 2.4;
+  // seat the ship on its three pads (VW-010): sample the ground under each pad, tilt to that plane,
+  // and set the height from the pads' average so none float or sink on slopes
+  const padH = (lx, lz) => H(SHIP.x + lx * Math.cos(SHIP_YAW) + lz * Math.sin(SHIP_YAW), SHIP.z - lx * Math.sin(SHIP_YAW) + lz * Math.cos(SHIP_YAW));
+  const hNose = padH(0, -2.6), hRight = padH(1.8, 1.4), hLeft = padH(-1.8, 1.4);
+  const SHIP_TILT = { x: clamp(Math.atan2(hNose - (hRight + hLeft) / 2, 4.0), -0.25, 0.25), z: clamp(Math.atan2(hRight - hLeft, 3.6), -0.25, 0.25) };
+  SHIP.y = (hNose + hRight + hLeft) / 3 + 2.5;
   shipModel.group.position.copy(SHIP).add(new THREE.Vector3(0, 46, 0));
   shipModel.group.rotation.order = 'YXZ';
-  shipModel.group.rotation.y = 2.4;
+  shipModel.group.rotation.set(SHIP_TILT.x, SHIP_YAW, SHIP_TILT.z);
   scene.add(shipModel.group);
   const shipAnim = { mode: 'landing', t: 0, vy: 0 };
 
@@ -3066,6 +3145,7 @@ function createGround(bodyId) {
     pickables.push(...node.meshes);
     return node;
   }
+  let way = null;   // the Ancient Waystone, placed after the first deposits so their seeded spawns don't change
   function spawnNodes(cx, cz, rnd) {
     const count = 15 + Math.floor(rnd() * 6);
     let made = 0, guard = 0;
@@ -3076,6 +3156,7 @@ function createGround(bodyId) {
       if (h < liquidLevel + 0.6 && theme.liquid !== 'ice') continue;
       if (terrain.slopeAt(x, z) > 0.35) continue;
       if ((x - SHIP.x) ** 2 + (z - SHIP.z) ** 2 < 15 * 15) continue;
+      if (way && (x - way.x) ** 2 + (z - way.z) ** 2 < 14 * 14) continue;
       if (nodes.some((nd) => !nd.dying && (nd.group.position.x - x) ** 2 + (nd.group.position.z - z) ** 2 < 11 * 11)) continue;
       const roll = rnd();
       makeNode(roll < 0.16 ? 'monolith' : roll < 0.48 ? 'large' : 'small', x, z, rnd);
@@ -3083,6 +3164,56 @@ function createGround(bodyId) {
     }
   }
   spawnNodes(0, 0, mulberry32(seed + 17));
+
+  /* ---------------- Ancient Waystone: the survey landmark, decoded with E (not mineable) ---------------- */
+  const WAY_DECODED = new THREE.Color(0.5, 2.2, 2.6);   // glyph colour once decoded (a Color: lerp targets must have r/g/b)
+  way = (() => {
+    const rnd = mulberry32(seed + 404);
+    let x = 0, z = 0;
+    for (let i = 0; i < 80; i++) {
+      const a = rnd() * TAU, r = 75 + rnd() * 50;
+      x = Math.cos(a) * r; z = Math.sin(a) * r;
+      if ((H(x, z) >= liquidLevel + 0.8 || theme.liquid === 'ice') && terrain.slopeAt(x, z) < 0.3
+        && !nodes.some((nd) => (nd.group.position.x - x) ** 2 + (nd.group.position.z - z) ** 2 < 14 * 14)) break;
+    }
+    const decoded = World.glyphs.has(bodyId);
+    const g = new THREE.Group();
+    const stone = new THREE.MeshStandardMaterial({ color: lin(theme.monolith), vertexColors: true, roughness: 0.45, metalness: 0.35, envMap: env, flatShading: true });
+    const glyphMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: decoded ? WAY_DECODED.clone() : new THREE.Color(3.2, 2.3, 0.9), emissiveIntensity: 1 });
+    const add = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y || 0; m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+    add(nodeGeo.monoStone, stone); add(nodeGeo.monoGlyph1, glyphMat); add(nodeGeo.monoRock, rockMat);
+    const cap = add(nodeGeo.monoCap, glyphMat, 10.2);
+    // light pillar, visible above the fog from across the landing zone, until the stone is decoded
+    const beaconMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { uOn: { value: decoded ? 0 : 1 }, uTime: { value: 0 }, uColor: { value: new THREE.Color(1.3, 0.82, 0.22) } },
+      vertexShader: 'varying float vY; varying vec3 vN; varying vec3 vV; void main(){ vY = uv.y; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'uniform float uOn, uTime; uniform vec3 uColor; varying float vY; varying vec3 vN; varying vec3 vV; void main(){ float edge = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 1.5); float fade = pow(1.0 - vY, 1.6); float pulse = 0.75 + 0.25 * sin(uTime * 2.2 - vY * 12.0); gl_FragColor = vec4(uColor * (0.35 + edge) * fade * pulse * uOn, 1.0); }'
+    });
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 1.3, 140, 14, 1, true).translate(0, 80, 0), beaconMat);
+    beacon.renderOrder = 7; beacon.frustumCulled = false;
+    g.add(beacon);
+    g.scale.setScalar(1.35);
+    g.rotation.y = rnd() * TAU;
+    g.position.set(x, H(x, z) - 0.3, z);
+    scene.add(g);
+    return { group: g, x, z, glyphMat, cap, beaconMat, decoded, fade: decoded ? 0 : 1 };
+  })();
+  function decodeWaystone() {
+    if (way.decoded) return null;
+    way.decoded = true;
+    World.glyphs.add(bodyId);
+    World.carbon += 30;
+    way.glyphMat.emissive.setRGB(4, 4, 4);   // flash, then settles to the decoded cyan in update()
+    way.glyphMat.emissiveIntensity = 1;
+    const p = way.group.position;
+    for (let i = 0; i < 120; i++) {
+      const a = Math.random() * TAU, s = 4 + Math.random() * 10;
+      sparks.emit(p.x + Math.cos(a) * 2, p.y + 2 + Math.random() * 13, p.z + Math.sin(a) * 2, Math.cos(a) * s, 2 + Math.random() * 8, Math.sin(a) * s,
+        i % 4 === 0 ? [4, 4, 4] : [3.2, 2.3, 0.9], 0.14 + Math.random() * 0.2, 1 + Math.random() * 1.2);
+    }
+    return GLYPH_WORDS[bodyId];
+  }
 
   function killNode(node, tel) {
     node.dying = true; node.dieT = 0;
@@ -3208,6 +3339,7 @@ function createGround(bodyId) {
     }
     const sp = shipModel.group.position;
     if (player.pos.y < sp.y + 1.2) pushOut(sp.x, sp.z, 5.2);
+    if (player.pos.y < way.group.position.y + 14) pushOut(way.x, way.z, 2.6);
     const hs = Math.hypot(player.vel.x, player.vel.z);
     if (player.onGround && hs > 0.6) {
       player.bobT += dt * hs * 1.15;
@@ -3288,7 +3420,8 @@ function createGround(bodyId) {
       shipAnim.t += dt;
       shipAnim.vy = Math.min(60, shipAnim.vy + dt * 34);
       g.position.y += shipAnim.vy * dt;
-      g.rotation.x = Math.min(0.35, shipAnim.t * 0.2);
+      g.rotation.x = SHIP_TILT.x + Math.min(0.35, shipAnim.t * 0.2);
+      g.rotation.z = SHIP_TILT.z * Math.max(0, 1 - shipAnim.t);   // level the wings as it lifts off the slope
       shipModel.gear.visible = shipAnim.t < 0.4;
       shipModel.setThrust(1, smooth(0.6, 1.4, shipAnim.t), World.time);
       if (shipAnim.t < 0.8) {
@@ -3350,6 +3483,17 @@ function createGround(bodyId) {
     sparks.update(dt, scale);
     tel.pos = player.pos; tel.yaw = player.yaw; tel.jet = player.jet;
     tel.nodesLeft = nodes.filter((n) => !n.dying).length;
+    // waystone: idle pulse while undecoded; after decoding, the flash settles to cyan and the beacon fades
+    way.cap.rotation.y += dt * (way.decoded ? 0.25 : 0.9);
+    way.fade = way.decoded ? Math.max(0, way.fade - dt * 0.5) : 1;
+    way.beaconMat.uniforms.uOn.value = way.fade;
+    way.beaconMat.uniforms.uTime.value = World.time;
+    if (way.decoded) way.glyphMat.emissive.lerp(WAY_DECODED, 1 - Math.exp(-2 * dt));
+    else way.glyphMat.emissiveIntensity = 0.8 + 0.35 * Math.sin(World.time * 2.4);
+    tel.wayPos = way.group.position;
+    tel.wayDist = Math.hypot(player.pos.x - way.x, player.pos.z - way.z);
+    tel.wayDecoded = way.decoded;
+    tel.nearWaystone = tel.wayDist < 7.5 && shipAnim.mode !== 'launch';
     return tel;
   }
 
@@ -3370,7 +3514,7 @@ function createGround(bodyId) {
     if (sunL.shadow.map) { sunL.shadow.map.dispose(); sunL.shadow.map = null; }
   }
   return {
-    scene, camera, vmScene, vmCamera, update, dispose, startLaunch, scanTargets, body, theme, player,
+    scene, camera, vmScene, vmCamera, update, dispose, startLaunch, scanTargets, decodeWaystone, body, theme, player,
     get shipLanded() { return shipAnim.mode === 'parked'; },
     post: { threshold: theme.threshold, bloom: theme.bloom, exposure: theme.exposure, aberr: 0.0007, vignette: 0.42, sat: 1.06 }
   };
@@ -3469,7 +3613,66 @@ function scanMarker(i) {
    ===================================================================== */
 let space = null, ground = null, active = null, paused = false, lastTel = {};
 const Trans = { dir: '', phase: 0, t: 0, body: null, frames: 0 };
-let warnCool = 0, fuelWarned = false;
+let warnCool = 0, fuelWarned = false, saveClock = 0, journalOpen = false;
+
+/* ---------------- Halcyon Survey ---------------- */
+function checkSurvey() {
+  if (World.surveyDone || surveyCount() < SURVEY.length) return;
+  World.surveyDone = true;
+  World.carbon += 100;
+  Save.write();
+  // let the objective's own banner read first
+  setTimeout(() => { banner('Halcyon System surveyed', 'Every world charted · +100 C', 'Survey complete'); Sound.complete(); }, 2600);
+}
+// close orbit around a non-landable body (Okara Major) counts as surveying it
+function surveySpace(tel) {
+  const b = tel.nearest;
+  if (!tel.giantClose || !b || World.surveyed.has(b.id)) return;
+  World.surveyed.add(b.id);
+  World.carbon += 20;
+  banner(b.name + ' surveyed', 'Atmospheric data recorded · +20 C', 'Survey log');
+  Sound.scan();
+  Save.write();
+  checkSurvey();
+}
+function toggleJournal() {
+  journalOpen = !journalOpen;
+  HUD.show('journal', journalOpen);
+  HUD.cache.delete('journalList');
+  if (journalOpen) renderJournal();
+  Sound.ui();
+}
+function renderJournal() {
+  const html = SURVEY.map((o) => {
+    const d = o.done();
+    return '<div class="flex gap-3"><span class="mono ' + (d ? 'text-am' : 'text-slate-500') + '">' + (d ? '✓' : '○') + '</span>'
+      + '<span class="' + (d ? 'text-slate-200' : 'text-slate-400') + '">' + o.label + '</span></div>';
+  }).join('');
+  if (HUD.cache.get('journalList') !== html) { HUD.cache.set('journalList', html); $('journalList').innerHTML = html; }
+  HUD.text('journalFoot', World.surveyDone ? 'Survey complete · thanks for playing' : World.glyphs.size + '/3 glyphs decoded · J to close');
+}
+/* intro: what a returning player has saved, plus a two-click reset */
+function renderSaveLine() {
+  const any = World.discovered.size || World.glyphs.size || World.surveyed.size || World.carbon || World.fuel < 100;
+  $('saveLine').style.display = any ? '' : 'none';
+  $('saveText').textContent = 'Saved voyage · survey ' + surveyCount() + '/' + SURVEY.length + ' · ' + World.carbon + ' C · ' + Math.round(World.fuel) + '% fuel';
+}
+let resetArmed = 0;
+$('newVoyage').addEventListener('click', () => {
+  if (gameState !== GAME_STATE.INTRO) return;
+  if (!resetArmed) {
+    $('newVoyage').textContent = 'Click again to erase progress';
+    resetArmed = setTimeout(() => { resetArmed = 0; $('newVoyage').textContent = 'New voyage'; }, 3500);
+    return;
+  }
+  clearTimeout(resetArmed); resetArmed = 0;
+  resetVoyage();
+  $('newVoyage').textContent = 'New voyage';
+  renderSaveLine();
+});
+const flushSave = () => { if (gameState !== GAME_STATE.INTRO) Save.write(); };
+window.addEventListener('pagehide', flushSave);
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushSave(); });
 
 function setState(s) {
   gameState = s;
@@ -3549,9 +3752,12 @@ function updateTransition(dt) {
         setState(GAME_STATE.GROUND_EXPLORATION);
         banner(T.body.name, T.body.klass + ' · ' + THEMES[T.body.type].cond.split(' · ')[0], first ? 'New world discovered' : 'Planetfall');
         toast('Hold LMB on crystals to mine carbon', 'info');
+        if (!World.glyphs.has(T.body.id)) setTimeout(() => toast('An Ancient Waystone is nearby. Follow its light beacon (C to scan)', 'info'), 1600);
+        Save.write();
       } else {
         setState(GAME_STATE.SPACE_FLIGHT);
         toast('Orbit reached · ' + T.body.name, 'info');
+        Save.write();
       }
     }
   }
@@ -3578,6 +3784,7 @@ function refuel() {
 Input.onPress = (code) => {
   if (gameState === GAME_STATE.INTRO || paused) return;
   if (code === 'KeyM') { Sound.toggleMute(); toast(Sound.muted ? 'Audio muted' : 'Audio on', 'info'); }
+  if (code === 'KeyJ') toggleJournal();
   if (code === 'KeyF' && (gameState === GAME_STATE.SPACE_FLIGHT || gameState === GAME_STATE.GROUND_EXPLORATION)) refuel();
   if (gameState === GAME_STATE.SPACE_FLIGHT) {
     if (code === 'KeyE') {
@@ -3593,6 +3800,14 @@ Input.onPress = (code) => {
     if (code === 'KeyE' && lastTel.nearShip) {
       if (World.fuel >= 10) beginLaunch();
       else { toast('Launch needs 10% fuel — press F to refuel', 'warn'); Sound.deny(); }
+    } else if (code === 'KeyE' && lastTel.nearWaystone) {
+      const w = ground.decodeWaystone();
+      if (w) {
+        Sound.glyph();
+        banner(w[0], '\u201c' + w[1] + '\u201d · +30 C', 'Glyph decoded');
+        toast('Waystone decoded · survey ' + surveyCount() + '/' + SURVEY.length, 'good');
+        Save.write(); checkSurvey();
+      } else toast('This waystone is already decoded', 'info');
     }
     if (code === 'KeyC') {
       if (scanCool > 0) { Sound.deny(); return; }
@@ -3620,6 +3835,10 @@ function hudShared() {
   HUD.text('fuelVal', Math.ceil(World.fuel) + '%');
   HUD.bar('fuelBar', World.fuel / 100);
   HUD.cls('fuelBarWrap', 'hot', World.fuel < 20);
+  const sc = surveyCount();
+  HUD.text('surveyVal', sc + '/' + SURVEY.length);
+  HUD.bar('surveyBar', sc / SURVEY.length);
+  if (journalOpen) renderJournal();
 }
 function hudSpace(tel) {
   const cam = space.camera;
@@ -3696,11 +3915,22 @@ function hudGround(tel) {
       el.lastChild.textContent = Math.round(d) + 'u';
     }
   }
+  if (now < scanUntil && tel.wayPos) {
+    const wp = tel.wayPos, ws = toScreen(proj.set(wp.x, wp.y + 16, wp.z).clone(), cam);
+    if (!ws.behind && ws.x > 0 && ws.x < ws.w && ws.y > 0 && ws.y < ws.h) {
+      const el = scanMarker(used++);
+      el.style.display = ''; el.style.opacity = clamp((scanUntil - now) / 1500, 0, 1);
+      HUD.place(el, ws.x, ws.y);
+      el.firstChild.style.borderColor = tel.wayDecoded ? '#4ff2ff' : '#ffd36e';
+      el.lastChild.textContent = 'WAYSTONE ' + Math.round(tel.wayDist) + 'u';
+    }
+  }
   for (let i = used; i < scanPool.length; i++) scanPool[i].style.display = 'none';
   if (tel.reward) toast('+' + tel.reward + ' Carbon', 'good');
   if (tel.respawned) toast('New deposits surfaced nearby — press C to scan', 'info');
   if (tel.overheatedNow) toast('Mining beam overheated', 'warn');
   if (tel.nearShip) setPrompt(World.fuel >= 10 ? '<span class="key">E</span>Board ship &amp; launch to orbit' : '<span class="key">F</span>Refuel first · launch needs 10% fuel');
+  else if (tel.nearWaystone) setPrompt(tel.wayDecoded ? 'Waystone decoded · ' + GLYPH_WORDS[ground.body.id][0] : '<span class="key">E</span>Decode the Ancient Waystone');
   else setPrompt(null);
 }
 
@@ -3730,6 +3960,8 @@ function tick(dtMs, now) {
     scanCool = Math.max(0, scanCool - dt);
     if (gameState === GAME_STATE.ATMOSPHERE_TRANSITION) updateTransition(dt);
     else if (active) lastTel = active.update(dt, gameState !== GAME_STATE.INTRO);
+    if (gameState === GAME_STATE.SPACE_FLIGHT) surveySpace(lastTel);
+    if (gameState !== GAME_STATE.INTRO && (saveClock += dt) > 5) { saveClock = 0; Save.write(); }
   }
   if (active) {
     const p = active.post;
@@ -3759,6 +3991,8 @@ canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); fatal('
    ===================================================================== */
 function boot() {
   if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) $('touchNote').style.display = '';
+  const restored = Save.load();
+  renderSaveLine();
   setState(GAME_STATE.INTRO);
   space = createSpace({ mode: 'intro' });
   active = space;
@@ -3778,13 +4012,15 @@ function boot() {
     space.beginFlight();
     Sound.boost();
     setTimeout(() => toast('Flight systems online · fly to a planet and press E', 'info'), 900);
+    if (restored && surveyCount()) setTimeout(() => toast('Voyage restored · survey ' + surveyCount() + '/' + SURVEY.length + ' · J for the log', 'good'), 1800);
+    else setTimeout(() => toast('Goal: survey the Halcyon System · J for the log', 'info'), 1800);
   });
 }
 try { boot(); } catch (e) { console.error(e); fatal('Voidwake failed to start: ' + (e && e.message ? e.message : e)); }
 
 /* debug / automation handle */
 window.__VW = {
-  renderer, World, Input, GAME_STATE, BODIES, Post,
+  renderer, World, Input, GAME_STATE, BODIES, Post, Save, SURVEY, surveyCount,
   get state() { return gameState; }, get space() { return space; }, get ground() { return ground; }, get tel() { return lastTel; },
   land(id) { if (space && gameState === GAME_STATE.SPACE_FLIGHT) beginLanding(BODY[id || 'eden']); },
   launch() { if (ground && gameState === GAME_STATE.GROUND_EXPLORATION) beginLaunch(); },
