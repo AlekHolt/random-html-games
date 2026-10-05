@@ -88,6 +88,18 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
 #banner.show{opacity:1;transform:translate(-50%,0)}
 #pause{transition:opacity .25s ease}
 @media (max-width:720px){ .val{font-size:22px} #hints{display:none} }
+/* narrow windows: halve the top panels, drop the coordinates and compass, keep warnings and prompts clear (VW-008) */
+@media (max-width:640px){
+  .hud-tl,.hud-tr{width:calc(50vw - 22px)!important;padding:8px 10px!important}
+  .hud-bl{width:min(250px,calc(100vw - 32px))!important;padding:8px 10px!important}
+  .hud-tl .val,.hud-tr .val{font-size:18px}
+  .hud-tr #tgtName,.hud-tl #pName{font-size:13px}
+  .hud-coords,#compass{display:none!important}
+  .element{width:36px;height:36px}
+  #boundWarn{top:30%;width:92vw}
+  #boundWarn>div:first-child{font-size:13px;letter-spacing:.08em}
+  #prompt{bottom:auto;top:60%;white-space:normal;max-width:92vw;text-align:center}
+}
 @media (prefers-reduced-motion:reduce){ .flash,.pulse{animation:none} }
 </style>
 </head>
@@ -98,16 +110,16 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
 <div id="hud" class="hud fixed inset-0 pointer-events-none z-20">
 
   <!-- top-left: telemetry -->
-  <div class="absolute left-4 top-4 sm:left-6 sm:top-5 panel px-4 py-3 w-[230px] s-only">
+  <div class="hud-tl absolute left-4 top-4 sm:left-6 sm:top-5 panel px-4 py-3 w-[230px] s-only">
     <div class="lbl">Velocity</div>
     <div class="flex items-baseline gap-2 mt-1"><span id="spdVal" class="val">0</span><span class="lbl tracking-[.2em]">u/s</span></div>
     <div class="bar mt-2"><i id="spdBar" style="transform:scaleX(0)"></i></div>
-    <div class="lbl mt-3">Coordinates</div>
-    <div class="mono text-[12px] text-cyan-200 mt-1 leading-5">
+    <div class="hud-coords lbl mt-3">Coordinates</div>
+    <div class="hud-coords mono text-[12px] text-cyan-200 mt-1 leading-5">
       X <span id="cX">0</span><br>Y <span id="cY">0</span><br>Z <span id="cZ">0</span>
     </div>
   </div>
-  <div class="absolute left-4 top-4 sm:left-6 sm:top-5 panel px-4 py-3 w-[250px] g-only">
+  <div class="hud-tl absolute left-4 top-4 sm:left-6 sm:top-5 panel px-4 py-3 w-[250px] g-only">
     <div class="lbl">Planetary Surface</div>
     <div id="pName" class="mono text-[17px] text-white mt-1">—</div>
     <div id="pClass" class="text-[13px] font-bold tracking-[.18em] uppercase text-cy/80">—</div>
@@ -118,7 +130,7 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
   </div>
 
   <!-- top-right: active target system -->
-  <div class="absolute right-4 top-4 sm:right-6 sm:top-5 panel px-4 py-3 w-[250px] text-right s-only">
+  <div class="hud-tr absolute right-4 top-4 sm:right-6 sm:top-5 panel px-4 py-3 w-[250px] text-right s-only">
     <div class="lbl">Active Target System <span class="key ml-1 mr-0">Tab</span></div>
     <div id="tgtName" class="mono text-[17px] text-white mt-2">—</div>
     <div id="tgtClass" class="text-[13px] font-bold tracking-[.18em] uppercase text-cy/80">—</div>
@@ -133,7 +145,7 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
   </div>
 
   <!-- bottom-left: ship & resources -->
-  <div class="absolute left-4 bottom-4 sm:left-6 sm:bottom-6 panel px-4 py-3 w-[250px]">
+  <div class="hud-bl absolute left-4 bottom-4 sm:left-6 sm:bottom-6 panel px-4 py-3 w-[250px]">
     <div class="flex items-center gap-3">
       <div class="element"><s>6</s><b>C</b></div>
       <div>
@@ -149,7 +161,7 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
       <div class="flex justify-between mt-3"><span class="lbl">Mining Beam Heat</span><span id="heatVal" class="mono text-[11px] text-slate-300">0%</span></div>
       <div id="heatBarWrap" class="bar warm mt-1"><i id="heatBar" style="transform:scaleX(0)"></i></div>
     </div>
-    <div class="text-[12px] font-bold tracking-[.12em] text-slate-400 mt-3"><span class="key">F</span>Refuel: 10 C → +20%</div>
+    <div class="text-[12px] font-bold tracking-[.12em] text-slate-400 mt-3"><span class="key">F</span>Refuel: 1 C = 2% fuel</div>
   </div>
 
   <!-- bottom-right: control hints -->
@@ -267,7 +279,7 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
 <div id="pause" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 opacity-0 pointer-events-none">
   <div class="panel px-10 py-8 text-center">
     <div class="font-orb font-black text-[28px] tracking-[.3em] text-white">PAUSED</div>
-    <div class="lbl mt-4">Click to resume</div>
+    <div id="pauseHint" class="lbl mt-4">Click to resume</div>
   </div>
 </div>
 
@@ -511,8 +523,8 @@ Post.resize();
 
 /* ---------------------------------------------------------------- input */
 const Input = {
-  keys: new Set(), mdx: 0, mdy: 0, left: false, locked: false, fallback: false,
-  onPress: null, onLockChange: null,
+  keys: new Set(), mdx: 0, mdy: 0, left: false, locked: false, fallback: false, everLocked: false,
+  onPress: null, onLockChange: null, onLockError: null,
   down(code) { return this.keys.has(code); },
   take() { const r = { dx: this.mdx, dy: this.mdy }; this.mdx = 0; this.mdy = 0; return r; },
   requestLock() {
@@ -539,10 +551,16 @@ document.addEventListener('mouseup', (e) => { if (e.button === 0) Input.left = f
 document.addEventListener('contextmenu', (e) => { if (Input.locked) e.preventDefault(); });
 document.addEventListener('pointerlockchange', () => {
   Input.locked = document.pointerLockElement === canvas;
-  if (!Input.locked) Input.left = false;
+  if (Input.locked) { Input.everLocked = true; Input.fallback = false; } else Input.left = false;
   if (Input.onLockChange) Input.onLockChange(Input.locked);
 });
-document.addEventListener('pointerlockerror', () => { Input.fallback = true; });
+// Fall back to raw cursor deltas only if pointer lock has never worked here (e.g. a sandboxed
+// frame). Once a lock has succeeded, an error is transient: Chrome refuses a re-lock for ~1 s
+// after the user exits with Esc, so stay paused and let the next click retry.
+document.addEventListener('pointerlockerror', () => {
+  if (!Input.everLocked) Input.fallback = true;
+  else if (Input.onLockError) Input.onLockError();
+});
 
 /* ------------------------------------------------------- audio synthesis */
 const Sound = {
@@ -721,12 +739,14 @@ const Sound = {
   },
   boost() { this.noiseBurst(0.9, { freq: 400, slideTo: 2400, q: 1.2, vol: 0.35, attack: 0.05 }); this.tone(90, 0.8, { slideTo: 220, vol: 0.2 }); },
 
-  /* per-frame mixing; p = { mode, throttle, speedN, boost, wind, jet, laser } */
+  /* per-frame mixing; p = { mode, paused, throttle, speedN, boost, wind, jet, laser } */
   update(p) {
     if (!this.ready) return;
     const t = this.ctx.currentTime;
     const musicLvl = { intro: 0.95, space: 0.9, trans: 0.55, ground: 0.42 }[p.mode] || 0.6;
-    this.set(this.music.gain, musicLvl, 0.8);
+    // paused: the world (wind, engine, beams) falls silent and the music ducks under the overlay
+    this.set(this.music.gain, musicLvl * (p.paused ? 0.35 : 1), p.paused ? 0.25 : 0.8);
+    this.set(this.sfx.gain, p.paused ? 0 : 1, 0.12);
     this.updatePad();
     const space = p.mode === 'space' || p.mode === 'trans';
     const th = space ? p.throttle : 0, sp = space ? p.speedN : 0, bo = space ? p.boost : 0;
@@ -1516,7 +1536,6 @@ function disposeTree(root) {
    STAR SYSTEM DATA
    ===================================================================== */
 const SUN_RADIUS = 240;
-const BOUNDARY = 5000, BOUNDARY_WARN = 4600;
 const BODIES = [
   { id: 'eden', name: 'Eden Thalos', klass: 'Paradise World', type: 'lush', radius: 180, orbit: 1500, period: 2600, phase: 0.9, incl: 0.05,
     tilt: 0.38, spin: 0.011, seed: 3.7, amp: 0.05, sea: 0.03, freq: 1.55,
@@ -1531,6 +1550,11 @@ const BODIES = [
     atmo: [0.45, 0.8, 1.2], atmoScale: 1.16, atmoDensity: 0.45, cloudCover: 0.64, cloudTint: [0.88, 0.95, 1.0], landable: true }
 ];
 const BODY = Object.fromEntries(BODIES.map((b) => [b.id, b]));
+// Outer boundary, derived from the furthest any body (plus rings or approach zone) can get from
+// the sun, so no world ever orbits inside the warning band. Currently 5,050 u warn / 5,950 u edge.
+const SYSTEM_REACH = Math.max(...BODIES.map((b) => b.orbit * Math.hypot(1, b.incl)
+  + (b.parent ? BODY[b.parent].orbit * Math.hypot(1, BODY[b.parent].incl) : 0) + b.radius * (b.ringOut || 2)));
+const BOUNDARY_WARN = Math.ceil((SYSTEM_REACH + 450) / 50) * 50, BOUNDARY = BOUNDARY_WARN + 900;
 
 function bodyPosition(body, t, out) {
   const a = body.phase + (t / body.period) * TAU;
@@ -1986,24 +2010,29 @@ function createSpace(opts) {
     ship.wasBoost = boost;
     let thrust = fIn > 0 ? (boost ? 430 : 105) : fIn < 0 ? -80 : 0;
     if (World.fuel <= 0 && fIn !== 0) { thrust *= 0.2; tel.noFuel = true; }
-    if (fIn > 0) World.fuel = Math.max(0, World.fuel - dt * (boost ? 1.9 : 0.42));
     const strafeX = ctrl ? (k.down('ArrowRight') ? 1 : 0) - (k.down('ArrowLeft') ? 1 : 0) : 0;
     const strafeY = ctrl ? (k.down('ArrowUp') ? 1 : 0) - (k.down('ArrowDown') ? 1 : 0) : 0;
     const acc = V.a.copy(V.fwd).multiplyScalar(thrust).addScaledVector(V.right, strafeX * 55).addScaledVector(V.up, strafeY * 55);
 
-    // outer boundary: damp outward acceleration to zero, then bleed outward velocity
+    // Outer boundary, a soft wall across the whole warning band: outward thrust fades to zero,
+    // outward speed bleeds off progressively, and past the edge a gentle spring eases the ship back.
     const r = ship.pos.length();
     tel.boundary = r > BOUNDARY_WARN ? (r > BOUNDARY ? 2 : 1) : 0;
+    let burn = 1;
     if (r > BOUNDARY_WARN) {
       const n = V.b.copy(ship.pos).multiplyScalar(1 / r);
+      const band = smooth(BOUNDARY_WARN, BOUNDARY, r);
       const ao = acc.dot(n);
-      if (ao > 0) acc.addScaledVector(n, -ao * smooth(BOUNDARY_WARN, BOUNDARY, r));
-      if (r > BOUNDARY) {
-        const vo = ship.vel.dot(n);
-        if (vo > 0) ship.vel.addScaledVector(n, -vo * (1 - Math.exp(-3 * dt)));
-        if (r > BOUNDARY + 120) ship.pos.multiplyScalar((BOUNDARY + 120) / r);
-      }
+      if (ao > 0) acc.addScaledVector(n, -ao * band);
+      burn = 1 - band * Math.max(0, V.fwd.dot(n) * Math.sign(thrust));   // no fuel for thrust the wall cancels
+      // brake outward speed at the constant deceleration (v² / 2·room) that brings the ship to rest
+      // exactly at the edge: a linear, predictable slowdown instead of a wall
+      const vo = ship.vel.dot(n);
+      if (vo > 0) ship.vel.addScaledVector(n, -Math.min(vo, vo * vo / (2 * Math.max(BOUNDARY - r, 25)) * dt));
+      if (r > BOUNDARY) ship.vel.addScaledVector(n, -Math.min(60, (r - BOUNDARY) * 0.6) * dt);
+      if (r > BOUNDARY + 400) ship.pos.multiplyScalar((BOUNDARY + 400) / r);
     }
+    if (fIn > 0) World.fuel = Math.max(0, World.fuel - dt * (boost ? 1.9 : 0.42) * burn);
     ship.vel.addScaledVector(acc, dt);
     const fwdSpeed = ship.vel.dot(V.fwd);
     V.c.copy(ship.vel).addScaledVector(V.fwd, -fwdSpeed).multiplyScalar(1 - Math.exp(-2.2 * dt));
@@ -2449,38 +2478,63 @@ function createTerrain(scene, type, seed, env, theme) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), eu = new THREE.Euler(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
   const tc = new THREE.Color();
 
-  function buildTile(t) {
-    const ox = t.tx * TILE, oz = t.tz * TILE, W = VPS + 2;
-    for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) H[j * W + i] = height(ox + (i - 1) * step, oz + (j - 1) * step);
-    const g = t.mesh.geometry, P = g.attributes.position.array, N = g.attributes.normal.array, C = g.attributes.color.array;
-    let minH = 1e9, maxH = -1e9;
-    for (let j = 0; j < VPS; j++) for (let i = 0; i < VPS; i++) {
-      const v = (j * VPS + i) * 3, h = H[(j + 1) * W + i + 1];
-      P[v] = i * step; P[v + 1] = h; P[v + 2] = j * step;
-      let nx = H[(j + 1) * W + i] - H[(j + 1) * W + i + 2], nz = H[j * W + i + 1] - H[(j + 2) * W + i + 1], ny = 2 * step;
-      const l = Math.sqrt(nx * nx + ny * ny + nz * nz); nx /= l; ny /= l; nz /= l;
-      N[v] = nx; N[v + 1] = ny; N[v + 2] = nz;
-      colorAt(col, ox + i * step, oz + j * step, h, 1 - ny, liquid);
-      C[v] = col[0]; C[v + 1] = col[1]; C[v + 2] = col[2];
-      if (h < minH) minH = h; if (h > maxH) maxH = h;
+  /* Tiles rebuild in small slices against a per-frame time budget, so crossing a tile boundary never
+     costs a whole row at once (VW-007): heights (6 rows per slice), then vertices (8 rows), then props
+     (one prop type per slice). Only one tile is in flight, because the height scratch buffer H is shared. */
+  const W = VPS + 2;
+  let cur = null;
+  function sliceTile(t) {
+    const ox = t.tx * TILE, oz = t.tz * TILE;
+    if (t.phase === 0) {
+      const end = Math.min(W, t.row + 6);
+      for (let j = t.row; j < end; j++) for (let i = 0; i < W; i++) H[j * W + i] = height(ox + (i - 1) * step, oz + (j - 1) * step);
+      t.row = end;
+      if (t.row >= W) { t.phase = 1; t.row = 0; t.minH = 1e9; t.maxH = -1e9; }
+    } else if (t.phase === 1) {
+      const g = t.mesh.geometry, P = g.attributes.position.array, N = g.attributes.normal.array, C = g.attributes.color.array;
+      const end = Math.min(VPS, t.row + 8);
+      for (let j = t.row; j < end; j++) for (let i = 0; i < VPS; i++) {
+        const v = (j * VPS + i) * 3, h = H[(j + 1) * W + i + 1];
+        P[v] = i * step; P[v + 1] = h; P[v + 2] = j * step;
+        let nx = H[(j + 1) * W + i] - H[(j + 1) * W + i + 2], nz = H[j * W + i + 1] - H[(j + 2) * W + i + 1], ny = 2 * step;
+        const l = Math.sqrt(nx * nx + ny * ny + nz * nz); nx /= l; ny /= l; nz /= l;
+        N[v] = nx; N[v + 1] = ny; N[v + 2] = nz;
+        colorAt(col, ox + i * step, oz + j * step, h, 1 - ny, liquid);
+        C[v] = col[0]; C[v + 1] = col[1]; C[v + 2] = col[2];
+        if (h < t.minH) t.minH = h; if (h > t.maxH) t.maxH = h;
+      }
+      t.row = end;
+      if (t.row >= VPS) {
+        g.attributes.position.needsUpdate = true; g.attributes.normal.needsUpdate = true; g.attributes.color.needsUpdate = true;
+        if (!g.boundingSphere) g.boundingSphere = new THREE.Sphere();
+        g.boundingSphere.center.set(TILE / 2, (t.minH + t.maxH) / 2, TILE / 2);
+        g.boundingSphere.radius = Math.sqrt(2 * (TILE / 2) * (TILE / 2) + ((t.maxH - t.minH) / 2) ** 2) + 1;
+        t.mesh.position.set(ox, 0, oz);
+        t.mesh.updateMatrix();
+        t.mesh.visible = true;
+        t.phase = 2; t.row = 0; t.rnd = mulberry32(hash3i(t.tx, t.tz, seed));
+      }
+    } else {
+      placePropDef(t, defs[t.row], ox, oz);
+      if (++t.row >= defs.length) t.phase = 3;
     }
-    g.attributes.position.needsUpdate = true; g.attributes.normal.needsUpdate = true; g.attributes.color.needsUpdate = true;
-    if (!g.boundingSphere) g.boundingSphere = new THREE.Sphere();
-    g.boundingSphere.center.set(TILE / 2, (minH + maxH) / 2, TILE / 2);
-    g.boundingSphere.radius = Math.sqrt(2 * (TILE / 2) * (TILE / 2) + ((maxH - minH) / 2) ** 2) + 1;
-    t.mesh.position.set(ox, 0, oz);
-    t.mesh.updateMatrix();
-    placeProps(t);
+  }
+  function hideProps(t) {
+    defs.forEach((d) => d.meshes.forEach((im) => {
+      for (let k = 0; k < d.perTile; k++) im.setMatrixAt(t.slot * d.perTile + k, zero);
+      im.instanceMatrix.needsUpdate = true;
+    }));
   }
 
   function slopeAt(x, z) {
     const dx = height(x + 1, z) - height(x - 1, z), dz = height(x, z + 1) - height(x, z - 1);
     return 1 - 2 / Math.sqrt(dx * dx + dz * dz + 4);
   }
-  function placeProps(t) {
-    const rnd = mulberry32(hash3i(t.tx, t.tz, seed));
-    const ox = t.tx * TILE, oz = t.tz * TILE;
-    defs.forEach((d) => {
+  // one prop type for one tile; t.rnd carries the tile's seeded stream across slices, so placement
+  // is identical to building the whole tile in one go
+  function placePropDef(t, d, ox, oz) {
+    const rnd = t.rnd;
+    {
       for (let k = 0; k < d.perTile; k++) {
         const id = t.slot * d.perTile + k;
         const x = ox + rnd() * TILE, z = oz + rnd() * TILE;
@@ -2504,29 +2558,36 @@ function createTerrain(scene, type, seed, env, theme) {
         }
       }
       d.meshes.forEach((im) => { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; });
-    });
+    }
   }
 
   const queue = [];
   let lastCtx = 1e9, lastCtz = 1e9;
-  function update(px, pz, budget) {
+  // budgetMs: wall-clock milliseconds of rebuild work allowed this frame (Infinity builds everything)
+  function update(px, pz, budgetMs) {
     const ctx = Math.floor(px / TILE), ctz = Math.floor(pz / TILE);
-    if (ctx === lastCtx && ctz === lastCtz && !queue.length) return;
-    lastCtx = ctx; lastCtz = ctz;
-    const want = new Map();
-    for (let dz = -HALF; dz <= HALF; dz++) for (let dx = -HALF; dx <= HALF; dx++) want.set((ctx + dx) + ',' + (ctz + dz), [ctx + dx, ctz + dz]);
-    const free = [];
-    tiles.forEach((t) => { if (want.has(t.key)) want.delete(t.key); else free.push(t); });
-    want.forEach(([tx, tz], key) => {
-      const t = free.pop();
-      if (!t) return;
-      t.tx = tx; t.tz = tz; t.key = key;
-      t.mesh.visible = false;
-      if (!queue.includes(t)) queue.push(t);
-    });
-    if (queue.length) {
+    if (ctx !== lastCtx || ctz !== lastCtz) {
+      lastCtx = ctx; lastCtz = ctz;
+      const want = new Map();
+      for (let dz = -HALF; dz <= HALF; dz++) for (let dx = -HALF; dx <= HALF; dx++) want.set((ctx + dx) + ',' + (ctz + dz), [ctx + dx, ctz + dz]);
+      const free = [];
+      tiles.forEach((t) => { if (want.has(t.key)) want.delete(t.key); else free.push(t); });
+      want.forEach(([tx, tz], key) => {
+        const t = free.pop();
+        if (!t) return;
+        t.tx = tx; t.tz = tz; t.key = key; t.phase = 0; t.row = 0;
+        t.mesh.visible = false;
+        hideProps(t);
+        if (t === cur) cur = null;   // it was mid-build for a tile that has scrolled away
+        if (!queue.includes(t)) queue.push(t);
+      });
       queue.sort((a, b) => (Math.abs(a.tx - ctx) + Math.abs(a.tz - ctz)) - (Math.abs(b.tx - ctx) + Math.abs(b.tz - ctz)));
-      for (let i = 0; i < budget && queue.length; i++) { const t = queue.shift(); buildTile(t); t.mesh.visible = true; }
+    }
+    const deadline = performance.now() + budgetMs;
+    while ((cur || queue.length) && performance.now() < deadline) {
+      if (!cur) cur = queue.shift();
+      sliceTile(cur);
+      if (cur.phase === 3) cur = null;
     }
   }
   function dispose() {
@@ -2534,7 +2595,7 @@ function createTerrain(scene, type, seed, env, theme) {
     mat.dispose();
     defs.forEach((d) => d.meshes.forEach((im) => { im.geometry.dispose(); im.material.dispose(); }));
   }
-  return { height, update, dispose, slopeAt, pending: () => queue.length };
+  return { height, update, dispose, slopeAt, pending: () => queue.length + (cur ? 1 : 0) };
 }
 
 /* =====================================================================
@@ -2570,7 +2631,7 @@ function createGround(bodyId) {
   scene.add(new THREE.HemisphereLight(new THREE.Color().fromArray(theme.hemiSky), new THREE.Color().fromArray(theme.hemiGround), theme.hemiI));
 
   const terrain = createTerrain(scene, body.type, seed, env, theme);
-  terrain.update(0, 0, 9999);
+  terrain.update(0, 0, Infinity);   // first build is synchronous, hidden behind the landing fade
   const H = terrain.height;
   const liquidLevel = theme.liquidLevel;
   const liquid = new THREE.Mesh(new THREE.PlaneGeometry(1800, 1800).rotateX(-Math.PI / 2), makeLiquidMaterial(theme.liquid, theme));
@@ -2785,19 +2846,22 @@ function createGround(bodyId) {
       player.pos.y = floor; player.vel.y = Math.max(0, player.vel.y); player.onGround = true; player.air = 0;
     } else player.onGround = player.pos.y - floor < 0.06 && player.vel.y <= 0;
     if (player.pos.y > floor + 70) { player.pos.y = floor + 70; player.vel.y = Math.min(player.vel.y, 0); }
-    // solid obstacles: mining nodes and the parked ship
+    // solid obstacles (mining nodes, the parked ship): push out, then drop the velocity component
+    // driving into the obstacle so the player slides along it instead of "running" in place
+    const pushOut = (cx, cz, r) => {
+      const dx = player.pos.x - cx, dz = player.pos.z - cz, d2 = dx * dx + dz * dz;
+      if (d2 >= r * r || d2 < 1e-6) return;
+      const d = Math.sqrt(d2), nx = dx / d, nz = dz / d;
+      player.pos.x = cx + nx * r; player.pos.z = cz + nz * r;
+      const vn = player.vel.x * nx + player.vel.z * nz;
+      if (vn < 0) { player.vel.x -= vn * nx; player.vel.z -= vn * nz; }
+    };
     for (const nd of nodes) {
-      if (nd.dying) continue;
-      const p = nd.group.position;
-      if (player.pos.y > p.y + nd.top) continue;
-      const dx = player.pos.x - p.x, dz = player.pos.z - p.z, r = nd.radius + 0.45, d2 = dx * dx + dz * dz;
-      if (d2 < r * r && d2 > 1e-6) { const d = Math.sqrt(d2); player.pos.x = p.x + dx / d * r; player.pos.z = p.z + dz / d * r; }
+      if (nd.dying || player.pos.y > nd.group.position.y + nd.top) continue;
+      pushOut(nd.group.position.x, nd.group.position.z, nd.radius + 0.45);
     }
     const sp = shipModel.group.position;
-    if (player.pos.y < sp.y + 1.2) {
-      const dx = player.pos.x - sp.x, dz = player.pos.z - sp.z, r = 5.2, d2 = dx * dx + dz * dz;
-      if (d2 < r * r && d2 > 1e-6) { const d = Math.sqrt(d2); player.pos.x = sp.x + dx / d * r; player.pos.z = sp.z + dz / d * r; }
-    }
+    if (player.pos.y < sp.y + 1.2) pushOut(sp.x, sp.z, 5.2);
     const hs = Math.hypot(player.vel.x, player.vel.z);
     if (player.onGround && hs > 0.6) {
       player.bobT += dt * hs * 1.15;
@@ -2809,7 +2873,7 @@ function createGround(bodyId) {
     const bobA = player.onGround ? Math.min(hs / 6, 1.6) : 0;
     camera.position.set(player.pos.x + Math.cos(player.bobT) * 0.03 * bobA, player.pos.y + 1.72 + Math.sin(player.bobT * 2) * 0.045 * bobA - player.dip, player.pos.z);
     camera.rotation.set(player.pitch, player.yaw, 0);
-    camera.fov = damp(camera.fov, sprint ? 80 : 74, 6, dt);
+    camera.fov = damp(camera.fov, sprint && hs > 3 ? 80 : 74, 6, dt);
     tel.inLiquid = inLiquid; tel.speed = hs; tel.bob = bobA;
   }
 
@@ -2914,7 +2978,7 @@ function createGround(bodyId) {
     else { Input.take(); beam.visible = false; impactLight.intensity = 0; launchCamera(dt); tel.heat = player.heat; }
     updateShip(dt, tel);
     updateNodes(dt, tel);
-    terrain.update(player.pos.x, player.pos.z, 2);
+    terrain.update(player.pos.x, player.pos.z, 2);   // ≤ 2 ms of tile streaming per frame
     shakeAmt = Math.max(0, shakeAmt - dt * 1.2);
     if (shakeAmt > 0) camera.position.add(V.a.set(Math.sin(World.time * 53) * shakeAmt * 0.12, Math.sin(World.time * 61) * shakeAmt * 0.12, 0).applyQuaternion(camera.quaternion));
     camera.updateProjectionMatrix();
@@ -2955,6 +3019,9 @@ function createGround(bodyId) {
     Object.values(nodeGeo).forEach((g) => g.dispose());
     sparks.dispose();
     envRT.dispose();
+    // r128 never frees a light's shadow render target on its own; without this, every planet visit
+    // leaked one 2048² texture (VW-006)
+    if (sunL.shadow.map) { sunL.shadow.map.dispose(); sunL.shadow.map = null; }
   }
   return {
     scene, camera, vmScene, vmCamera, update, dispose, startLaunch, scanTargets, body, theme, player,
@@ -3149,13 +3216,17 @@ function updateTransition(dt) {
 /* =====================================================================
    INPUT BINDINGS
    ===================================================================== */
+/* 1 carbon buys 2% fuel, at most 10 C (+20%) per press, and only what fits in the tank */
 function refuel() {
-  if (World.fuel >= 99.5) { toast('Fuel tank already full', 'info'); Sound.deny(); return; }
-  if (World.carbon < 10) { toast('Need 10 carbon to refuel', 'warn'); Sound.deny(); return; }
-  World.carbon -= 10;
-  World.fuel = Math.min(100, World.fuel + 20);
+  const room = 100 - World.fuel;
+  if (room < 1) { toast('Fuel tank already full', 'info'); Sound.deny(); return; }
+  const cost = Math.min(10, Math.ceil(room / 2), World.carbon);
+  if (cost < 1) { toast('No carbon. Mine crystals or asteroids', 'warn'); Sound.deny(); return; }
+  const gained = Math.min(room, cost * 2);
+  World.carbon -= cost;
+  World.fuel = Math.min(100, World.fuel + gained);
   fuelWarned = false;
-  toast('Refuelled +20% · −10 C', 'good');
+  toast('Refuelled +' + Math.round(gained) + '% · −' + cost + ' C', 'good');
   Sound.ui();
 }
 Input.onPress = (code) => {
@@ -3188,9 +3259,10 @@ Input.onPress = (code) => {
 };
 function inPlay() { return gameState === GAME_STATE.SPACE_FLIGHT || gameState === GAME_STATE.GROUND_EXPLORATION || gameState === GAME_STATE.ATMOSPHERE_TRANSITION; }
 Input.onLockChange = (locked) => {
-  if (locked) { paused = false; $('pause').style.opacity = '0'; $('pause').style.pointerEvents = 'none'; }
+  if (locked) { paused = false; $('pause').style.opacity = '0'; $('pause').style.pointerEvents = 'none'; $('pauseHint').textContent = 'Click to resume'; }
   else if (inPlay() && !Input.fallback) { paused = true; $('pause').style.opacity = '1'; $('pause').style.pointerEvents = 'auto'; }
 };
+Input.onLockError = () => { if (paused) $('pauseHint').textContent = 'The browser needs a moment. Click again to resume'; };
 $('pause').addEventListener('click', () => { Sound.init(); Input.requestLock(); if (Input.fallback) Input.onLockChange(true); });
 canvas.addEventListener('mousedown', () => { if (inPlay() && !Input.locked && !Input.fallback) Input.requestLock(); });
 
@@ -3294,7 +3366,7 @@ function soundParams(tel) {
   const mode = gameState === GAME_STATE.INTRO ? 'intro' : gameState === GAME_STATE.SPACE_FLIGHT ? 'space' : gameState === GAME_STATE.GROUND_EXPLORATION ? 'ground' : 'trans';
   const transWind = gameState === GAME_STATE.ATMOSPHERE_TRANSITION ? (Trans.phase === 2 && Trans.dir === 'land' ? 0.6 : 1) : 0;
   return {
-    mode, throttle: tel.throttle || 0, speedN: tel.speedN || 0, boost: tel.boostAmt || 0,
+    mode, paused, throttle: tel.throttle || 0, speedN: tel.speedN || 0, boost: tel.boostAmt || 0,
     wind: ground ? Math.max(transWind, 0.45 + clamp((tel.speed || 0) / 12, 0, 0.4)) : transWind,
     jet: !!tel.jetting, laser: !!tel.laser && !paused
   };

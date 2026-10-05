@@ -38,7 +38,11 @@ of three.js r128.
 | `C` | Scanner pulse: tags every deposit within range |
 | `E` | Board the ship and launch to orbit (costs 10% fuel) |
 
-`F` turns 10 carbon into 20% fuel anywhere. `M` mutes, `Esc` pauses.
+`F` turns carbon into fuel anywhere: 1 C buys 2%, up to 20% per press, and you only pay for what fits
+in the tank. `M` mutes. `Esc` pauses, which silences the world and ducks the music.
+
+The system ends at an outer boundary about 5,000 u from the sun. Past the warning line, outward thrust
+fades out and the ship is braked to a stop before the edge, without burning fuel against it.
 
 ## The loop
 
@@ -114,8 +118,9 @@ r128 from cdnjs, the Tailwind CDN and two Google fonts.
 python3 -m http.server 8000
 ```
 
-The game needs a keyboard and mouse. If the browser refuses pointer lock (in some embedded views,
-for example), mouse steering falls back to raw cursor movement.
+The game needs a keyboard and mouse. If the browser never grants pointer lock (in some embedded views,
+for example), mouse steering falls back to raw cursor movement. A one-off refusal after you press `Esc`
+(Chrome blocks an instant re-lock) just keeps the game paused until you click again.
 
 ## Debug handles
 
