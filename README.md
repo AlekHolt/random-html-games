@@ -12,8 +12,11 @@ open the file and it plays. Everything is generated at runtime in code.
 | Game | What it is | Built with | |
 | --- | --- | --- | --- |
 | **[Neon Run](neon-run/)** | Endless night-city highway racer with two drivable tiers of elevated expressway, procedural city and cars, and synthesised engine audio | WebGL · three.js | [▶ Play](https://alekholt.github.io/random-html-games/neon-run/) |
+| **[Voidwake](voidwake/)** | No Man's Sky–style space explorer: shader-generated planets with analytic atmospheres, a ringed gas giant, seamless landings, surface mining and a synthesised ambient soundtrack | WebGL · three.js · Tailwind | [▶ Play](https://alekholt.github.io/random-html-games/voidwake/) |
 
 [![Neon Run](neon-run/screenshots/chase.jpg)](neon-run/)
+
+[![Voidwake](voidwake/screenshots/rings.jpg)](voidwake/)
 
 ---
 
