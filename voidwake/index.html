@@ -1624,7 +1624,7 @@ const Save = {
       ids(d.discovered).forEach((id) => World.discovered.add(id));
       ids(d.glyphs).forEach((id) => World.glyphs.add(id));
       ids(d.surveyed).forEach((id) => World.surveyed.add(id));
-      World.surveyDone = !!d.surveyDone;
+      World.surveyDone = d.surveyDone === true && surveyCount() === SURVEY.length;   // trust only if the objectives agree (VW-011)
       if (d.stats) { World.stats.mined = d.stats.mined | 0; World.stats.asteroids = d.stats.asteroids | 0; }
       return true;
     } catch (e) { return false; }
