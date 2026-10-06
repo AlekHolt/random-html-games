@@ -114,6 +114,8 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
 
 <!-- ============ HUD ============ -->
 <div id="hud" class="hud fixed inset-0 pointer-events-none z-20">
+ <div id="threatMarkers" class="absolute inset-0 s-only"></div>
+  <div id="hitFlash" class="absolute inset-0" style="opacity:0;background:radial-gradient(ellipse at center,transparent 50%,rgba(255,40,60,.6))"></div>
   <div id="pulseEta" class="absolute left-1/2 top-[calc(50%+54px)] -translate-x-1/2 mono text-[12px] tracking-[.14em] text-cy s-only" style="display:none"></div>
 
   <!-- top-left: telemetry -->
@@ -121,6 +123,10 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
     <div class="lbl">Velocity</div>
     <div class="flex items-baseline gap-2 mt-1"><span id="spdVal" class="val">0</span><span class="lbl tracking-[.2em]">u/s</span></div>
     <div class="bar mt-2"><i id="spdBar" style="transform:scaleX(0)"></i></div>
+ <div class="flex justify-between mt-3"><span class="lbl">Shield</span><span id="shVal" class="mono text-[11px] text-cy">50</span></div>
+    <div class="bar mt-1"><i id="shBar"></i></div>
+    <div class="flex justify-between mt-2"><span class="lbl">Hull</span><span id="hullVal" class="mono text-[11px] text-slate-300">100</span></div>
+    <div id="hullWrap" class="bar warm mt-1"><i id="hullBar"></i></div>
     <div id="pulseBadge" class="mono text-[11px] tracking-[.12em] text-cy mt-2 pulse" style="display:none">PULSE DRIVE</div>
     <div class="hud-coords lbl mt-3">Coordinates</div>
     <div class="hud-coords mono text-[12px] text-cyan-200 mt-1 leading-5">
@@ -192,6 +198,7 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
       <div><span class="key">Shift</span>Boost · <span class="key">Space</span>Pulse drive</div>
       <div><span class="key">N</span>System map · <span class="key">Tab</span>Next target</div>
       <div><span class="key">Q</span>Align to target · <span class="key">LMB</span>Mine</div>
+      <div><span class="key">RMB</span>Cannons</div>
       <div><span class="key">E</span>Enter atmosphere</div>
     </div>
     <div class="g-only c-only">
@@ -603,15 +610,15 @@ window.addEventListener('keydown', (e) => {
   Input.keys.add(e.code);
 });
 window.addEventListener('keyup', (e) => Input.keys.delete(e.code));
-window.addEventListener('blur', () => { Input.keys.clear(); Input.left = false; });
+window.addEventListener('blur', () => { Input.keys.clear(); Input.left = false; Input.right = false; });
 document.addEventListener('mousemove', (e) => {
   if (!Input.locked && !Input.fallback) return;
   Input.mdx += clamp(e.movementX || 0, -150, 150);
   Input.mdy += clamp(e.movementY || 0, -150, 150);
 });
-document.addEventListener('mousedown', (e) => { if (e.button === 0 && (Input.locked || Input.fallback)) Input.left = true; });
-document.addEventListener('mouseup', (e) => { if (e.button === 0) Input.left = false; });
-document.addEventListener('contextmenu', (e) => { if (Input.locked) e.preventDefault(); });
+document.addEventListener('mousedown', (e) => { if ((Input.locked || Input.fallback) && !overlayOpen()) { if (e.button === 0) Input.left = true; if (e.button === 2) Input.right = true; } });
+document.addEventListener('mouseup', (e) => { if (e.button === 0) Input.left = false; if (e.button === 2) Input.right = false; });
+document.addEventListener('contextmenu', (e) => { if (Input.locked || (Input.fallback && inPlay())) e.preventDefault(); });
 document.addEventListener('pointerlockchange', () => {
   Input.locked = document.pointerLockElement === canvas;
   if (Input.locked) { Input.everLocked = true; Input.fallback = false; } else Input.left = false;
@@ -1771,7 +1778,7 @@ function bodyPosition(body, t, out) {
 const World = {
   time: 420, fuel: 100, carbon: 0, discovered: new Set(), navTarget: 'eden', lastBody: 'eden',
   glyphs: new Set(), surveyed: new Set(), surveyDone: false,
-  stats: { mined: 0, asteroids: 0, earned: 0, contracts: 0 },
+  stats: { mined: 0, asteroids: 0, earned: 0, contracts: 0, pirates: 0 }, hull: 100, shield: 50,
   credits: 300, cargo: {}, market: { aurelia: {}, noctis: {} }, board: {}, contracts: [], seq: 0, dust: 6,
   ship: { cls: 'vanta', paint: 0 }, upg: { pods: 0, recycler: 0, focus: 0 }
 };
@@ -1792,6 +1799,15 @@ const surveyCount = () => SURVEY.filter((o) => o.done()).length;
 
 /* Progress persists in localStorage. Every access is guarded: in a private window or with storage
    blocked, the voyage simply isn't saved. */
+// a saved contract is kept only if it's well formed; its reward is clamped (VW-021)
+function okContract(c) {
+  if (!c || !['deliver', 'courier', 'glyph', 'bounty'].includes(c.kind) || !BODY[c.to] || !BODY[c.to].city || typeof c.title !== 'string' || !Number.isFinite(+c.reward)) return null;
+  if (c.kind === 'deliver' && !(tradeable(c.good) && c.n > 0 && c.n <= 40)) return null;
+  if (c.kind === 'glyph' && !WILD.some((b) => b.id === c.world)) return null;
+  if (c.kind === 'bounty' && !(c.n > 0 && c.n <= 10)) return null;
+  return { id: ++World.seq, kind: c.kind, to: c.to, title: c.title.slice(0, 120), reward: clamp(Math.floor(+c.reward), 0, 20000), good: c.good, n: c.n | 0, world: c.world,
+    start: Math.min(c.start | 0, World.stats.pirates) };
+}
 const Save = {
   KEY: 'voidwake.save.v1',
   load() {
@@ -1806,14 +1822,16 @@ const Save = {
       ids(d.surveyed).forEach((id) => World.surveyed.add(id));
       World.surveyDone = d.surveyDone === true && surveyCount() === SURVEY.length;   // trust only if the objectives agree (VW-011)
       if (BODIES.some((bd) => bd.id === d.navTarget)) World.navTarget = d.navTarget;
-      if (d.stats) { World.stats.mined = d.stats.mined | 0; World.stats.asteroids = d.stats.asteroids | 0; World.stats.earned = d.stats.earned | 0; World.stats.contracts = d.stats.contracts | 0; }
+      if (d.stats) { World.stats.mined = d.stats.mined | 0; World.stats.asteroids = d.stats.asteroids | 0; World.stats.earned = d.stats.earned | 0; World.stats.contracts = d.stats.contracts | 0; World.stats.pirates = d.stats.pirates | 0; }
       if (Number.isFinite(+d.credits)) World.credits = Math.max(0, Math.floor(+d.credits));
       if (d.ship && Object.prototype.hasOwnProperty.call(SHIPS, d.ship.cls)) World.ship = { cls: d.ship.cls, paint: clamp(d.ship.paint | 0, 0, PAINTS.length - 1) };
       if (d.upg) for (const u in UPGRADES) World.upg[u] = clamp(d.upg[u] | 0, 0, UPGRADES[u].max);
+      World.hull = Number.isFinite(+d.hull) ? clamp(+d.hull, 1, shipStat('hull')) : shipStat('hull');
+      if (Number.isFinite(+d.dust)) World.dust = clamp(+d.dust, 0, 6);
+      if (d.market) for (const c of ['aurelia', 'noctis']) if (d.market[c]) for (const id of Object.keys(GOODS)) { const v = +d.market[c][id]; if (v > 0) World.market[c][id] = Math.min(v, 60); }
+      if (d.board) for (const c of ['aurelia', 'noctis']) if (Array.isArray(d.board[c])) World.board[c] = d.board[c].map(okContract).filter(Boolean).slice(0, 3);
       if (d.cargo && typeof d.cargo === 'object') for (const id of Object.keys(GOODS)) { const n = Math.floor(+d.cargo[id]) || 0; if (n > 0 && cargoUsed() + n <= cargoCap()) World.cargo[id] = n; }
-      if (Array.isArray(d.contracts)) World.contracts = d.contracts.filter((c) => c && ['deliver', 'courier', 'glyph'].includes(c.kind) && BODY[c.to] && BODY[c.to].city
-        && typeof c.title === 'string' && Number.isFinite(+c.reward) && (c.kind !== 'deliver' || (tradeable(c.good) && c.n > 0)) && (c.kind !== 'glyph' || WILD.some((b) => b.id === c.world))).slice(0, 3)
-        .map((c) => ({ id: ++World.seq, kind: c.kind, to: c.to, title: c.title.slice(0, 120), reward: Math.floor(+c.reward), good: c.good, n: c.n | 0, world: c.world }));
+      if (Array.isArray(d.contracts)) World.contracts = d.contracts.map(okContract).filter(Boolean).slice(0, 3);
       return true;
     } catch (e) { return false; }
   },
@@ -1821,7 +1839,8 @@ const Save = {
     try {
       localStorage.setItem(this.KEY, JSON.stringify({
         v: 1, carbon: World.carbon, fuel: Math.round(World.fuel * 10) / 10, surveyDone: World.surveyDone, stats: World.stats, navTarget: World.navTarget,
-        credits: World.credits, cargo: World.cargo, contracts: World.contracts, ship: World.ship, upg: World.upg,
+        credits: World.credits, cargo: World.cargo, contracts: World.contracts, ship: World.ship, upg: World.upg, hull: Math.ceil(World.hull),
+        dust: Math.round(World.dust * 100) / 100, market: World.market, board: World.board,
         discovered: [...World.discovered], glyphs: [...World.glyphs], surveyed: [...World.surveyed]
       }));
     } catch (e) { /* storage unavailable: progress just isn't kept */ }
@@ -1831,8 +1850,8 @@ const Save = {
 function resetVoyage() {
   Object.assign(World, { fuel: 100, carbon: 0, surveyDone: false, navTarget: 'eden', lastBody: 'eden' });
   World.discovered.clear(); World.glyphs.clear(); World.surveyed.clear();
-  World.stats.mined = 0; World.stats.asteroids = 0; World.stats.earned = 0; World.stats.contracts = 0;
-  Object.assign(World, { credits: 300, cargo: {}, market: { aurelia: {}, noctis: {} }, board: {}, contracts: [], dust: 6,
+  World.stats.mined = 0; World.stats.asteroids = 0; World.stats.earned = 0; World.stats.contracts = 0; World.stats.pirates = 0;
+  Object.assign(World, { hull: 100, shield: 50, credits: 300, cargo: {}, market: { aurelia: {}, noctis: {} }, board: {}, contracts: [], dust: 6,
     ship: { cls: 'vanta', paint: 0 }, upg: { pods: 0, recycler: 0, focus: 0 } });
   Save.clear();
 }
@@ -2509,6 +2528,7 @@ function createSpace(opts) {
     origin.add(d);
     camera.position.sub(d);
     sparks.shift(d);
+    shiftCombat(d);
     ship.pos.set(0, 0, 0);
     computePositions(World.time);
   }
@@ -2620,6 +2640,7 @@ function createSpace(opts) {
     if (mode !== 'flight') return '';
     if (pulse.state !== 'off') { dropPulse(null); return 'Pulse drive disengaged'; }
     if (World.fuel < 1) { Sound.deny(); return 'Not enough fuel for the pulse drive'; }
+    if (hostiles()) { Sound.deny(); return 'Pulse drive jammed · hostiles nearby'; }
     V.b.copy(origin).add(ship.pos);
     if (V.b.length() > BOUNDARY_WARN - 20000 && V.fwd.set(0, 0, -1).applyQuaternion(ship.quat).dot(V.b) > 0) { Sound.deny(); return 'Heliopause ahead · turn inward to engage the pulse drive'; }
     const near = pulseBlocker();
@@ -2934,6 +2955,7 @@ function createSpace(opts) {
     sunLight.target.position.copy(ship.pos);
     fields.forEach((fd) => fd.af.update(dt));
     mine(dt, ctrl, tel);
+    combat(dt, ctrl, tel);
     sparks.update(dt, Post.state.sh / (2 * Math.tan(camera.fov * Math.PI / 360)));
     updateDust(dt);
     sunMat.uniforms.uTime.value = World.time;
@@ -2995,6 +3017,185 @@ function createSpace(opts) {
   updateCamera(0);
   if (mode === 'flight') { camera.position.copy(camOff.set(0, 3.3 * camK, 15 * camK)).applyQuaternion(ship.quat).add(ship.pos); camera.quaternion.copy(ship.quat).multiply(pitchDown); }
   placeBodies(World.time);
+
+  /* ---------------- light combat: cannons, pirates, shields and hull, customs ---------------- */
+  const BOLT_N = 160, bolts = [], pirates = [], pods = [];
+  const boltMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.25, 8, 5, 1, true).rotateX(Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), BOLT_N);
+  boltMesh.frustumCulled = false; boltMesh.count = 0;
+  scene.add(boltMesh);
+  const CB = { zero: new THREE.Vector3(), q: new THREE.Quaternion(), z: new THREE.Vector3(0, 0, 1), m: new THREE.Matrix4(), s: new THREE.Vector3(1, 1, 1), c: new THREE.Color(),
+    a: new THREE.Vector3(), b: new THREE.Vector3(), d: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), mm: new THREE.Matrix4(), qq: new THREE.Quaternion() };
+  let gunCool = 0, gunSide = 0, raidClock = 0, nextRaid = 150 + Math.random() * 110, regenT = 0;
+  const customs = { done: false, t: 0 };
+  const hullMax = () => shipStat('hull');
+  World.hull = Math.min(World.hull, hullMax());
+  const hostiles = () => pirates.some((p) => p.hp > 0);
+  // closest approach of the segment a→b to c, squared
+  function segD2(a, b, c) {
+    CB.d.subVectors(b, a);
+    const L = CB.d.lengthSq(), t = L > 0 ? clamp(CB.a.subVectors(c, a).dot(CB.d) / L, 0, 1) : 0;
+    return CB.a.copy(a).addScaledVector(CB.d, t).distanceToSquared(c);
+  }
+  function fireBolt(from, dir, speed, inherit, enemy, dmg) {
+    if (bolts.length >= BOLT_N) bolts.shift();
+    bolts.push({ p: from.clone(), prev: from.clone(), v: dir.clone().multiplyScalar(speed).add(inherit), life: 1.5, enemy, dmg });
+  }
+  function boom(p, scale, rgb) {
+    for (let i = 0; i < 60 * scale; i++) {
+      const s = (20 + Math.random() * 60) * scale;
+      sparks.emit(p.x, p.y, p.z, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s, Math.random() < 0.4 ? [6, 5, 4] : rgb, 2 + Math.random() * 3 * scale, 0.6 + Math.random() * 0.9);
+    }
+  }
+  function damagePlayer(d, tel) {
+    regenT = 4;
+    const toShield = Math.min(World.shield, d);
+    World.shield -= toShield; World.hull -= d - toShield;
+    tel.damaged = (tel.damaged || 0) + d;
+    ship.shake = Math.max(ship.shake, 0.35);
+    if (World.hull <= 0) destroyed(tel);
+  }
+  function destroyed(tel) {
+    boom(ship.pos, 2.5, [6, 2, 0.6]); Sound.shatter(); Sound.thud();
+    const fee = Math.floor(World.credits * 0.1);
+    World.credits -= fee; World.cargo = {}; World.hull = hullMax(); World.shield = 50;
+    World.contracts = World.contracts.filter((c) => c.kind !== 'courier');   // the parcels went down with the ship
+    pirates.forEach((p) => { scene.remove(p.m.group); dropModel(p.m.group); }); pirates.length = 0; bolts.length = 0;
+    teleportNear(World.lastBody || 'eden', 4000);
+    tel.destroyed = fee;
+  }
+  function spawnRaid(n) {
+    V.fwd.set(0, 0, -1).applyQuaternion(ship.quat);
+    for (let k = 0; k < n; k++) {
+      const m = PHOBOS_VW.buildShip(THREE, 'pirate', { env, role: 'pirate' });
+      m.gear.visible = false; scene.add(m.group);
+      const pos = ship.pos.clone().addScaledVector(V.fwd, 1700).add(CB.a.set(Math.random() - 0.5, (Math.random() - 0.5) * 0.4, Math.random() - 0.5).normalize().multiplyScalar(500 + k * 260));
+      const q = new THREE.Quaternion().setFromRotationMatrix(CB.mm.lookAt(pos, ship.pos, CB.up));
+      pirates.push({ m, pos, q, vel: new THREE.Vector3(), hp: 70, r: Math.max(8, m.radius * 1.3), fire: 1 + Math.random(), mode: 'attack', t: 0, brk: new THREE.Vector3(), far: 0, speed: 290 + Math.random() * 40 });
+    }
+  }
+  function killPirate(p, tel) {
+    p.hp = 0;
+    boom(p.pos, 1.4, [6, 1.8, 0.5]); Sound.shatter();
+    scene.remove(p.m.group); dropModel(p.m.group);
+    const bounty = 200 + Math.floor(Math.random() * 4) * 25;
+    World.credits += bounty; World.stats.earned += bounty; World.stats.pirates++;
+    tel.bounty = bounty;
+    const pod = PHOBOS_VW.buildLootPod(THREE, env);
+    pod.position.copy(p.pos); scene.add(pod);
+    pods.push({ g: pod, life: 60, loot: Math.random() < 0.4 ? ['aurium', 1 + Math.floor(Math.random() * 2)] : ['ferrite', 3 + Math.floor(Math.random() * 3)], cr: 60 + Math.floor(Math.random() * 120) });
+  }
+  function combat(dt, ctrl, tel) {
+    // player cannons (hold RMB): alternate muzzles, converge on the reticle 1,000 u out
+    gunCool -= dt;
+    if (ctrl && Input.right && pulse.state === 'off' && gunCool <= 0 && mode === 'flight') {
+      gunCool = 0.12;
+      shipModel.group.updateMatrixWorld(true);
+      const g = shipModel.guns[gunSide++ % shipModel.guns.length], from = CB.b.copy(g).applyMatrix4(shipModel.group.matrixWorld);
+      CB.d.set(0, 0, -1).applyQuaternion(camera.quaternion);
+      // aim assist: a pirate within ~6° of the reticle gets a lead shot at its intercept point
+      let best = null, bestA = 0.1;
+      for (const p of pirates) {
+        if (p.hp <= 0) continue;
+        const ang = CB.d.angleTo(CB.a.subVectors(p.pos, camera.position));
+        if (ang < bestA && p.pos.distanceTo(from) < 2600) { bestA = ang; best = p; }
+      }
+      if (best) CB.d.copy(best.pos).addScaledVector(best.vel, best.pos.distanceTo(from) / 1900).sub(from).normalize();
+      else CB.d.multiplyScalar(1000).add(camera.position).sub(from).normalize();
+      fireBolt(from, CB.d, 1900, ship.vel, false, 9 * shipStat('mine'));
+      Sound.tone(620 + Math.random() * 60, 0.06, { type: 'square', vol: 0.03 });
+    }
+    // pirate raids: deep space only, twice as often in the lawless Noctis approaches, never near Aurelia's patrols
+    const aur = bodyById.aurelia, noc = bodyById.noctis;
+    const aurD = ship.pos.distanceTo(aur.pos) - aur.b.radius, nocZone = ship.pos.distanceTo(noc.pos) < 90000;
+    if (mode === 'flight' && !pirates.length && aurD > 45000 && nearestBody().surf > 6000) raidClock += dt * (nocZone ? 2 : 1);
+    if (raidClock > nextRaid) {
+      raidClock = 0; nextRaid = 150 + Math.random() * 110;
+      spawnRaid(nocZone ? 3 : 2);
+      if (pulse.state !== 'off') dropPulse('Pulse interdicted · pirates!');
+      tel.raid = true;
+    }
+    // pirates: attack runs with lead, break off when close, fire when lined up
+    for (let i = pirates.length - 1; i >= 0; i--) {
+      const p = pirates[i];
+      if (p.hp <= 0) { pirates.splice(i, 1); continue; }
+      const to = CB.a.subVectors(ship.pos, p.pos), dist = to.length();
+      p.t -= dt;
+      if (p.mode === 'attack' && dist < 240) { p.mode = 'break'; p.t = 2 + Math.random() * 1.5; p.brk.copy(to).negate().normalize().add(CB.b.set(Math.random() - 0.5, (Math.random() - 0.5) * 0.6, Math.random() - 0.5)).normalize(); }
+      if (p.mode === 'break' && p.t <= 0) p.mode = 'attack';
+      const target = p.mode === 'attack' ? CB.b.copy(ship.pos).addScaledVector(ship.vel, dist / 1500) : CB.b.copy(p.pos).addScaledVector(p.brk, 500);
+      CB.qq.setFromRotationMatrix(CB.mm.lookAt(p.pos, target, CB.up));
+      p.q.slerp(CB.qq, 1 - Math.exp(-1.7 * dt));
+      const fwd = CB.d.set(0, 0, -1).applyQuaternion(p.q);
+      p.vel.copy(fwd).multiplyScalar(p.speed * (p.mode === 'break' ? 1.15 : 1));
+      p.pos.addScaledVector(p.vel, dt);
+      p.m.group.position.copy(p.pos); p.m.group.quaternion.copy(p.q);
+      p.m.setThrust(0.8, p.mode === 'break' ? 1 : 0, World.time);
+      p.fire -= dt;
+      if (p.mode === 'attack' && dist < 1800 && p.fire <= 0 && fwd.dot(to) / Math.max(dist, 1) > 0.94) {
+        p.fire = 0.45 + Math.random() * 0.25;
+        // lead the player (bolts leave at 1500 u/s), with a little scatter
+        const from = CB.b.copy(p.pos).addScaledVector(fwd, 7);
+        const aim = CB.a.copy(ship.pos).addScaledVector(ship.vel, dist / 1500).sub(from).normalize();
+        aim.x += (Math.random() - 0.5) * 0.024; aim.y += (Math.random() - 0.5) * 0.024; aim.z += (Math.random() - 0.5) * 0.024;
+        fireBolt(from, aim.normalize(), 1500, CB.zero, true, 4);
+        Sound.tone(300 + Math.random() * 40, 0.08, { type: 'sawtooth', vol: 0.02 });
+      }
+      // outrun them and they give up
+      p.far = dist > 9000 ? p.far + dt : 0;
+      if (p.far > 6) { scene.remove(p.m.group); dropModel(p.m.group); pirates.splice(i, 1); tel.escaped = true; }
+    }
+    // bolts: swept hits so fast shots can't tunnel through a hull
+    const hitMe = Math.max(6, shipModel.radius) ** 2;
+    for (let i = bolts.length - 1; i >= 0; i--) {
+      const b = bolts[i];
+      b.prev.copy(b.p); b.p.addScaledVector(b.v, dt); b.life -= dt;
+      let hit = false;
+      if (b.enemy) { if (segD2(b.prev, b.p, ship.pos) < hitMe) { damagePlayer(b.dmg, tel); hit = true; } }
+      else for (const p of pirates) if (p.hp > 0 && segD2(b.prev, b.p, p.pos) < p.r * p.r) {
+        p.hp -= b.dmg; hit = true; tel.hitMark = true;
+        if (p.hp <= 0) killPirate(p, tel);
+        break;
+      }
+      if (hit) for (let k = 0; k < 8; k++) sparks.emit(b.p.x, b.p.y, b.p.z, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, b.enemy ? [6, 1, 0.4] : [1, 4, 6], 1.2, 0.35);
+      if (hit || b.life <= 0) bolts.splice(i, 1);
+    }
+    bolts.forEach((b, i) => {
+      CB.q.setFromUnitVectors(CB.z, CB.a.copy(b.v).normalize());
+      CB.m.compose(b.p, CB.q, CB.s); boltMesh.setMatrixAt(i, CB.m);
+      boltMesh.setColorAt(i, b.enemy ? CB.c.setRGB(6, 0.9, 0.5) : CB.c.setRGB(0.8, 4, 6));
+    });
+    boltMesh.count = bolts.length; boltMesh.instanceMatrix.needsUpdate = true;
+    if (boltMesh.instanceColor) boltMesh.instanceColor.needsUpdate = true;
+    // loot pods: fly through to collect
+    for (let i = pods.length - 1; i >= 0; i--) {
+      const pd = pods[i];
+      pd.life -= dt; pd.g.userData.update(World.time); pd.g.rotation.y += dt;
+      if (pd.g.position.distanceTo(ship.pos) < 40) {
+        const got = cargoAdd(pd.loot[0], pd.loot[1]);
+        World.credits += pd.cr;
+        tel.loot = { cr: pd.cr, n: got, name: GOODS[pd.loot[0]].name };
+        Sound.pickup(); pd.life = 0;
+      }
+      if (pd.life <= 0) { scene.remove(pd.g); dropModel(pd.g); pods.splice(i, 1); }
+    }
+    // shields recharge after 4 s without a hit
+    regenT -= dt;
+    if (regenT <= 0) World.shield = Math.min(50, World.shield + 10 * dt);
+    // Aurelia customs: a scan on approach; 60% chance to find Neon Dust
+    if (aurD < 22000 && !customs.done && (World.cargo.neondust || 0) > 0) { customs.done = true; customs.t = 2.5; tel.customsScan = true; }
+    if (customs.t > 0 && (customs.t -= dt) <= 0) {
+      if (Math.random() < 0.6) { const n = cargoTake('neondust', 999), fine = n * 60; World.credits = Math.max(0, World.credits - fine); tel.customs = { n, fine }; }
+      else tel.customs = { n: 0 };
+    }
+    if (aurD > 60000) customs.done = false;
+    tel.threats = pirates;
+  }
+  function shiftCombat(d) {
+    pirates.forEach((p) => p.pos.sub(d));
+    bolts.forEach((b) => { b.p.sub(d); b.prev.sub(d); });
+    pods.forEach((pd) => pd.g.position.sub(d));
+  }
 
   /* system map data: true positions in the sun's frame */
   function mapData() {
@@ -5542,7 +5743,8 @@ function createGround(bodyId) {
       sparks.emit(end.x, end.y, end.z, -ray.ray.direction.x * 4 + (Math.random() - 0.5) * 7, 2 + Math.random() * 5, -ray.ray.direction.z * 4 + (Math.random() - 0.5) * 7,
         i === 0 ? [7, 1.2, 1] : c, 0.08 + Math.random() * 0.08, 0.3 + Math.random() * 0.4);
     }
-    if (node) {
+    if (node && node.kind === 'deposit' && cargoUsed() >= cargoCap()) tel.holdFull = true;   // VW-020: don't destroy what can't be carried
+    else if (node) {
       node.hp -= 62 * (World.upg.focus ? 1.4 : 1) * dt;
       node.flash = 1;
       if (node.hp <= 0) killNode(node, tel);
@@ -5687,11 +5889,11 @@ const GOODS = {
 const DUST_BUY = 55, DUST_SELL = 170, FUEL_CR = 3, PAINT_CR = 200;
 /* player ship classes (Phobos ships.js). Multipliers scale thrust and top speed, pulse speed, fuel burn and mining. */
 const SHIPS = {
-  vanta: { name: 'Vanta', klass: 'Fighter', price: 0, cargo: 24, speed: 1, pulse: 1, burn: 1, mine: 1, desc: 'The nimble starter fighter.' },
-  mule: { name: 'Mule', klass: 'Hauler', price: 16000, cargo: 64, speed: 0.82, pulse: 0.9, burn: 1.15, mine: 1, desc: 'Slow and boxy, with a hold the size of a hangar.' },
-  pathfinder: { name: 'Pathfinder', klass: 'Explorer', price: 22000, cargo: 36, speed: 1.05, pulse: 1.2, burn: 0.6, mine: 1.15, desc: 'Long legs: a faster pulse on far less fuel.' },
-  razor: { name: 'Razor', klass: 'Interceptor', price: 30000, cargo: 16, speed: 1.3, pulse: 1.1, burn: 1.1, mine: 1.6, only: 'noctis', desc: 'Black-market interceptor with oversized cannons.' },
-  solaris: { name: 'Solaris', klass: 'Luxury yacht', price: 55000, cargo: 40, speed: 1.2, pulse: 1.3, burn: 0.8, mine: 1, only: 'aurelia', desc: 'White-gold yacht with the fastest pulse in Halcyon.' }
+  vanta: { name: 'Vanta', klass: 'Fighter', price: 0, cargo: 24, speed: 1, pulse: 1, burn: 1, mine: 1, hull: 100, desc: 'The nimble starter fighter.' },
+  mule: { name: 'Mule', klass: 'Hauler', price: 16000, cargo: 64, speed: 0.82, pulse: 0.9, burn: 1.15, mine: 1, hull: 180, desc: 'Slow and boxy, with a hold the size of a hangar.' },
+  pathfinder: { name: 'Pathfinder', klass: 'Explorer', price: 22000, cargo: 36, speed: 1.05, pulse: 1.2, burn: 0.6, mine: 1.15, hull: 120, desc: 'Long legs: a faster pulse on far less fuel.' },
+  razor: { name: 'Razor', klass: 'Interceptor', price: 30000, cargo: 16, speed: 1.3, pulse: 1.1, burn: 1.1, mine: 1.6, only: 'noctis', hull: 110, desc: 'Black-market interceptor with oversized cannons.' },
+  solaris: { name: 'Solaris', klass: 'Luxury yacht', price: 55000, cargo: 40, speed: 1.2, pulse: 1.3, burn: 0.8, mine: 1, only: 'aurelia', hull: 140, desc: 'White-gold yacht with the fastest pulse in Halcyon.' }
 };
 const PAINTS = [
   { name: 'Factory finish', p: null },
@@ -5732,12 +5934,14 @@ function cargoTake(id, n) {
   return got;
 }
 // what a city pays: base × its appetite × saturation from recent sales × a slow drift
-function priceAt(city, id) {
+function priceAt(city, id, extra) {
   if (!tradeable(id)) return 0;
-  const g = GOODS[id], sold = World.market[city][id] || 0;
+  const g = GOODS[id], sold = (World.market[city][id] || 0) + (extra || 0);
   const drift = 1 + 0.08 * Math.sin(World.time / 900 + id.length * 1.7 + (city === 'noctis' ? 2.1 : 0));
   return Math.max(1, Math.round(g.base * g[city] * drift * Math.max(0.55, 1 - sold * 0.015)));
 }
+// what n units fetch when sold one after another (each sale saturates the market a little more) (VW-014)
+function saleValue(city, id, n) { let v = 0; for (let k = 0; k < n; k++) v += priceAt(city, id, k); return v; }
 function marketTick(dt) {
   for (const c in World.market) for (const id in World.market[c]) World.market[c][id] = Math.max(0, World.market[c][id] - dt / 12);
   World.dust = Math.min(6, World.dust + dt / 120);
@@ -5752,8 +5956,12 @@ function rollContract(city) {
     const g = wants[Math.floor(Math.random() * wants.length)], n = 4 + Math.floor(Math.random() * 7);
     return { id, kind: 'deliver', good: g, n, to: city, reward: Math.round(n * GOODS[g].base * 2.1 + 120), title: 'Deliver ' + n + ' ' + GOODS[g].name + ' to ' + BODY[city].name };
   }
+  if (k >= 0.62 && k < 0.84) {
+    const n = 2 + Math.floor(Math.random() * 3);
+    return { id, kind: 'bounty', n, start: World.stats.pirates, to: city, reward: 260 * n + 200, title: 'Destroy ' + n + ' pirates, report to ' + BODY[city].name };
+  }
   const open = WILD.filter((b) => !World.glyphs.has(b.id));
-  if (k < 0.8 || !open.length) return { id, kind: 'courier', to: other, reward: 350 + Math.floor(Math.random() * 9) * 50, title: 'Courier a sealed parcel to ' + BODY[other].name };
+  if (k < 0.62 || !open.length) return { id, kind: 'courier', to: other, reward: 250 + Math.floor(Math.random() * 9) * 25, title: 'Courier a sealed parcel to ' + BODY[other].name };
   const b = open[Math.floor(Math.random() * open.length)];
   return { id, kind: 'glyph', world: b.id, to: city, reward: 450 + Math.floor(Math.random() * 6) * 50, title: 'Decode the ' + b.name + ' waystone, report to ' + BODY[city].name };
 }
@@ -5762,7 +5970,8 @@ function boardFor(city) {
   while (b.length < 3) b.push(rollContract(city));
   return b;
 }
-const contractReady = (c) => (c.kind === 'deliver' ? (World.cargo[c.good] || 0) >= c.n : c.kind === 'courier' ? (World.cargo.parcel || 0) > 0 : World.glyphs.has(c.world));
+const contractReady = (c) => (c.kind === 'deliver' ? (World.cargo[c.good] || 0) >= c.n : c.kind === 'courier' ? (World.cargo.parcel || 0) > 0
+  : c.kind === 'bounty' ? World.stats.pirates - c.start >= c.n : World.glyphs.has(c.world));
 
 /* =====================================================================
    VENDORS: the kiosk panels in the city districts
@@ -5832,21 +6041,23 @@ function renderVendor() {
     body = ids.length ? ids.map((id) => {
       const p = priceAt(city, id), n = World.cargo[id];
       return row('<b class="text-white">' + GOODS[id].name + '</b> <span class="text-slate-400">× ' + n + '</span><div class="text-[12px] text-slate-500">' + p + ' CR each</div>',
-        btn('sell:' + id + ':1', 'Sell 1', true) + btn('sell:' + id + ':' + n, 'Sell all · ' + (p * n).toLocaleString(), true, 'hot'));
+        btn('sell:' + id + ':1', 'Sell 1', true) + btn('sell:' + id + ':' + n, 'Sell all · ' + saleValue(city, id, n).toLocaleString(), true, 'hot'));
     }).join('') : '<div class="text-slate-400">Nothing in your hold this broker trades. Mine planet deposits and ore asteroids.</div>';
     if (World.cargo.neondust) body += '<div class="text-[12px] text-slate-500 mt-2">Brokers won’t touch Neon Dust.</div>';
     const need = Math.ceil(100 - World.fuel), cost = need * FUEL_CR;
     body += '<div class="lbl mt-5 mb-1">Fuel</div>';
-    if (World.fuel < 10 && World.credits < Math.ceil(10 - World.fuel) * FUEL_CR) body += row('Emergency grant: enough fuel to reach orbit', btn('grant', 'Accept', true, 'hot'));
+    if (World.fuel < 10 && World.credits < Math.ceil(10 - World.fuel) * FUEL_CR) body += row('Emergency grant: enough fuel to launch and reach a world', btn('grant', 'Accept', true, 'hot'));
     else body += row('Refuel to 100% · ' + FUEL_CR + ' CR per 1%', btn('fuel', need < 1 ? 'Tank full' : 'Refuel · ' + cost + ' CR', need >= 1 && World.credits >= FUEL_CR, 'hot'));
     body += '<div class="text-[12px] text-slate-500 mt-4">This market pays best for ' + bestBuyers(city).join(', ') + '.</div>';
   } else if (k === 'contracts') {
-    const mine = World.contracts.filter((c) => c.to === city);
+    const mine = World.contracts.filter((c) => c.to === city), away = World.contracts.filter((c) => c.to !== city);
+    if (away.length) body += '<div class="lbl mb-1">Active elsewhere</div>' + away.map((c) =>
+      row('<b class="text-white">' + c.title + '</b><div class="text-[12px] text-slate-500">' + c.reward.toLocaleString() + ' CR</div>', btn('drop:' + c.id, 'Abandon', true))).join('') + '<div class="mb-3"></div>';
     if (mine.length) body += '<div class="lbl mb-1">Ready to hand in here</div>' + mine.map((c) =>
-      row('<b class="text-white">' + c.title + '</b><div class="text-[12px] text-slate-500">' + c.reward.toLocaleString() + ' CR</div>', btn('turnin:' + c.id, contractReady(c) ? 'Complete' : 'Not yet', contractReady(c), 'hot'))).join('');
+      row('<b class="text-white">' + c.title + '</b><div class="text-[12px] text-slate-500">' + c.reward.toLocaleString() + ' CR</div>', btn('drop:' + c.id, 'Abandon', true) + btn('turnin:' + c.id, contractReady(c) ? 'Complete' : 'Not yet', contractReady(c), 'hot'))).join('');
     body += '<div class="lbl mt-4 mb-1">Offers · ' + World.contracts.length + '/3 active</div>' + boardFor(city).map((c) =>
       row('<b class="text-white">' + c.title + '</b><div class="text-[12px] text-slate-500">' + c.reward.toLocaleString() + ' CR' + (c.kind === 'courier' ? ' · takes 1 cargo slot' : '') + '</div>',
-        btn('take:' + c.id, 'Accept', World.contracts.length < 3 && (c.kind !== 'courier' || cargoUsed() < cargoCap())))).join('');
+        btn('take:' + c.id, 'Accept', World.contracts.length < 3 && (c.kind !== 'courier' || (cargoUsed() < cargoCap() && !World.contracts.some((x) => x.kind === 'courier')))))).join('');
   } else if (k === 'bar') {
     line = '“' + RUMOURS[city][rumourIdx % RUMOURS[city].length] + '”';
     body = row('Buy a round and listen', btn('rumour', 'Another rumour', true));
@@ -5885,22 +6096,28 @@ $('vBody').addEventListener('click', (e) => {
   if (!b || b.disabled || !vendorOpen) return;
   const [act, a1, a2] = b.dataset.act.split(':'), city = vendorCity;
   if (act === 'sell') {
-    const n = cargoTake(a1, +a2 || 1), p = priceAt(city, a1);
-    World.credits += n * p; World.market[city][a1] = (World.market[city][a1] || 0) + n; World.stats.earned += n * p;
-    toast('Sold ' + n + ' ' + GOODS[a1].name + ' · +' + (n * p).toLocaleString() + ' CR', 'good'); Sound.pickup();
+    const n = cargoTake(a1, +a2 || 1), v = saleValue(city, a1, n);
+    World.credits += v; World.market[city][a1] = (World.market[city][a1] || 0) + n; World.stats.earned += v;
+    toast('Sold ' + n + ' ' + GOODS[a1].name + ' · +' + v.toLocaleString() + ' CR', 'good'); Sound.pickup();
   } else if (act === 'fuel') {
     const pct = Math.min(Math.ceil(100 - World.fuel), Math.floor(World.credits / FUEL_CR));
     World.credits -= pct * FUEL_CR; World.fuel = Math.min(100, World.fuel + pct); fuelWarned = false;
     toast('Refuelled +' + pct + '% · −' + pct * FUEL_CR + ' CR', 'good'); Sound.ui();
   } else if (act === 'grant') {
-    World.fuel = 10; toast('Emergency fuel granted · 10%', 'info'); Sound.ui();
+    World.fuel = 30; toast('Emergency fuel granted · 30%', 'info'); Sound.ui();   // launch costs 10 (VW-016)
   } else if (act === 'take') {
     const board = boardFor(city), i = board.findIndex((c) => c.id === +a1);
-    if (i < 0 || World.contracts.length >= 3) return;
+    if (i < 0 || World.contracts.length >= 3 || (board[i].kind === 'courier' && World.contracts.some((x) => x.kind === 'courier'))) return;
     const c = board.splice(i, 1)[0];
     if (c.kind === 'courier' && !cargoAdd('parcel', 1)) { board.splice(i, 0, c); return; }
     World.contracts.push(c);
     toast('Contract accepted · ' + c.title, 'info'); Sound.ui();
+  } else if (act === 'drop') {
+    const i = World.contracts.findIndex((c) => c.id === +a1);
+    if (i < 0) return;
+    const c = World.contracts.splice(i, 1)[0];
+    if (c.kind === 'courier') cargoTake('parcel', 1);
+    toast('Contract abandoned · ' + c.title, 'warn'); Sound.deny();
   } else if (act === 'turnin') {
     const i = World.contracts.findIndex((c) => c.id === +a1), c = World.contracts[i];
     if (!c || c.to !== city || !contractReady(c)) return;
@@ -5916,7 +6133,7 @@ $('vBody').addEventListener('click', (e) => {
     const S = SHIPS[a1], cost = Math.max(0, S.price - Math.round(SHIPS[World.ship.cls].price * 0.5));
     if (!S || World.credits < cost || (S.only && S.only !== city)) return;
     if (cargoUsed() > S.cargo + World.upg.pods * 8) { toast('Sell cargo first · the ' + S.name + ' holds ' + (S.cargo + World.upg.pods * 8), 'warn'); Sound.deny(); return; }
-    World.credits -= cost; World.ship = { cls: a1, paint: 0 };
+    World.credits -= cost; World.ship = { cls: a1, paint: 0 }; World.hull = shipStat('hull');
     ground.rebuildShip();
     banner('New ship · ' + S.name, S.klass + ' · cargo ' + cargoCap(), BODY[city].name + ' shipwright'); Sound.complete();
   } else if (act === 'paint') {
@@ -5951,6 +6168,7 @@ $('vClose').addEventListener('click', closeVendor);
 function createCity(bodyId) {
   ensureAssets();
   const body = BODY[bodyId], city = bodyId, noct = city === 'noctis', theme = THEMES[body.type];
+  World.hull = shipStat('hull'); World.shield = 50;   // dock crews patch the hull
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 2200);
   camera.rotation.order = 'YXZ';
@@ -6144,6 +6362,7 @@ function createCity(bodyId) {
   }
   function dispose() {
     disposeTree(scene);
+    if (key.shadow.map) key.shadow.map.dispose();   // VW-017
     envRT.dispose();
   }
   update(0, false);
@@ -6835,6 +7054,7 @@ function hudSpace(tel) {
   HUD.show('pulseBadge', tel.pulse !== 'off');
   if (tel.pulse !== 'off') HUD.text('pulseBadge', tel.pulse === 'spool' ? 'PULSE CHARGING · ' + Math.round(tel.pulseN * 100) + '%' : 'PULSE DRIVE ENGAGED');
   if (tel.pulseNote) toast(tel.pulseNote, 'info');
+  combatHud(tel, cam);
   const nav = tel.nav || { b: tel.nearest, dist: tel.nearestSurf, pulseEta: tel.nearestSurf / pulseTop() };
   const tb = nav.b, dist = nav.dist;
   const tpos = space.bodyRenderPos(tb.id);
@@ -6875,11 +7095,48 @@ function hudSpace(tel) {
   else if (tel.giantClose) setPrompt(tel.nearest.name + ' · gas giant · no landing zone');
   else setPrompt(null);
 }
+let holdWarned = false;
 function cargoToast(tel) {
   const c = tel.cargoGain;
   if (!c) return;
   if (c.n) toast('+' + c.n + ' ' + c.name + ' · cargo ' + cargoUsed() + '/' + cargoCap(), 'good');
   if (c.lost) toast('Cargo hold full · ' + c.lost + ' ' + c.name + ' lost', 'warn');
+}
+let hitFlash = 0;
+const threatPool = [];
+function combatHud(tel, cam) {
+  const sm = shipStat('hull');
+  HUD.text('shVal', String(Math.round(World.shield))); HUD.bar('shBar', World.shield / 50);
+  HUD.text('hullVal', Math.ceil(World.hull) + '/' + sm); HUD.bar('hullBar', World.hull / sm);
+  HUD.cls('hullWrap', 'hot', World.hull < sm * 0.3);
+  if (tel.damaged) hitFlash = Math.min(1, hitFlash + tel.damaged * 0.06);
+  hitFlash = Math.max(0, hitFlash - 0.04);
+  $('hitFlash').style.opacity = hitFlash.toFixed(2);
+  const th = tel.threats || [];
+  let used = 0;
+  for (const p of th) {
+    if (p.hp <= 0) continue;
+    const s = toScreen(proj.copy(p.pos), cam);
+    if (s.behind) continue;
+    while (threatPool.length <= used) {
+      const el = document.createElement('div');
+      el.className = 'marker';
+      el.innerHTML = '<div style="width:22px;height:22px;margin:-11px 0 0 -11px;border:2px solid #ff4d5e;transform:rotate(45deg);box-shadow:0 0 10px rgba(255,77,94,.7)"></div><div class="mono" style="color:#ff8a96;font-size:10px;margin:6px 0 0 -20px;width:40px;text-align:center"></div>';
+      $('threatMarkers').appendChild(el); threatPool.push(el);
+    }
+    const el = threatPool[used++];
+    el.style.display = '';
+    HUD.place(el, clamp(s.x, 12, s.w - 12), clamp(s.y, 12, s.h - 12));
+    el.lastChild.textContent = Math.round(p.hp) + '%';
+  }
+  for (let i = used; i < threatPool.length; i++) threatPool[i].style.display = 'none';
+  if (tel.raid) { banner('Pirates', 'Hostile ships inbound · RMB cannons · outrun them to escape', 'Interdiction'); Sound.deny(); }
+  if (tel.bounty) toast('Pirate destroyed · bounty +' + tel.bounty + ' CR', 'good');
+  if (tel.loot) toast('Salvage +' + tel.loot.cr + ' CR' + (tel.loot.n ? ' · +' + tel.loot.n + ' ' + tel.loot.name : ''), 'good');
+  if (tel.escaped) toast('Pirates broke off pursuit', 'info');
+  if (tel.customsScan) toast('Aurelia Customs · scanning your hold…', 'warn');
+  if (tel.customs) toast(tel.customs.n ? 'Contraband seized: ' + tel.customs.n + ' Neon Dust · fined ' + tel.customs.fine + ' CR' : 'Customs scan clear · welcome to Aurelia', tel.customs.n ? 'warn' : 'good');
+  if (tel.destroyed !== undefined) banner('Ship destroyed', 'Insurance rebuilt your ship · cargo lost · −' + tel.destroyed.toLocaleString() + ' CR', 'Wreck');
 }
 function hudGround(tel) {
   const b = ground.body, cam = ground.camera;
@@ -6931,6 +7188,7 @@ function hudGround(tel) {
   for (let i = used; i < scanPool.length; i++) scanPool[i].style.display = 'none';
   if (tel.reward) toast('+' + tel.reward + ' Carbon', 'good');
   cargoToast(tel);
+  if (tel.holdFull && !holdWarned) { holdWarned = true; toast('Cargo hold full · sell at Aurelia or Noctis', 'warn'); setTimeout(() => { holdWarned = false; }, 6000); }
   if (tel.respawned) toast('New deposits surfaced nearby — press C to scan', 'info');
   if (tel.overheatedNow) toast('Mining beam overheated', 'warn');
   if (tel.nearShip) setPrompt(World.fuel >= 10 ? '<span class="key">E</span>Board ship &amp; launch to orbit' : ground.isCity ? 'Launch needs 10% fuel · buy it at the broker' : '<span class="key">F</span>Refuel first · launch needs 10% fuel');
