@@ -4441,14 +4441,15 @@ vec3 npcRotX(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x, c
     const outer = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: noct ? 0x101116 : 0xb8a888, roughness: 0.9 }));
     outer.position.y = -0.05; root.add(outer); kit.materials.push(outer.material);
     // skyline: rings of towers around the plaza; the inner ring frames it closely
-    const towerPos = [];
+    const towerPos = [], LANES = [[150, 34, 1], [215, 60, -1], [290, 95, 1]];   // aerial traffic lanes: radius, height, direction
     kit.towers.forEach((t, v) => {
       const N = noct ? 20 : 11, im = new THREE.InstancedMesh(t.geometry, t.material, N); let k = 0;
-      for (let tries = 0; k < N && tries < 400; tries++) {
+      for (let tries = 0; k < N && tries < 2000; tries++) {
         const inner = k < (noct ? 4 : 3), a = rnd() * TAU, r = inner ? 85 + rnd() * 40 : 130 + Math.pow(rnd(), 0.7) * 470, x = Math.cos(a) * r, z = Math.sin(a) * r;
         if (Math.abs(x) < 75 && Math.abs(z) < 75) continue;
         if (towerPos.some(([px, pz, pr]) => Math.hypot(px - x, pz - z) < pr + t.footprint + 6)) continue;
         const s = inner ? 0.8 : 0.7 + rnd() * 0.5;
+        if (LANES.some(([lr]) => Math.abs(Math.hypot(x, z) - lr) < t.footprint * s * 1.42 + 10)) continue;   // keep traffic lanes clear (VW-019); 1.42 covers the footprint's diagonal
         Q.setFromEuler(E.set(0, noct ? Math.floor(rnd() * 4) * Math.PI / 2 : rnd() * TAU, 0)); M4.compose(P.set(x, 0, z), Q, S.set(s, s, s)); im.setMatrixAt(k, M4);
         towerPos.push([x, z, t.footprint * s]);
         colliders.push(new THREE.Box3(P.clone().add(new THREE.Vector3(-t.footprint * s, 0, -t.footprint * s)), P.clone().add(new THREE.Vector3(t.footprint * s, t.height * s, t.footprint * s))));
@@ -4488,7 +4489,7 @@ vec3 npcRotX(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x, c
     if (kit.props.fountain) place(kit.props.fountain, [[0, 6, 0]]);
     place(kit.props.skybridge, [[0, -64, 0, 28], [-64, 0, Math.PI / 2, 44], [64, 10, Math.PI / 2, 36]]);
     // aerial traffic: three lanes, alternating direction
-    const lanes = [[150, 34, 1], [215, 60, -1], [290, 95, 1]], carMeshes = [], cars = [];
+    const lanes = LANES, carMeshes = [], cars = [];
     kit.cars.forEach((c, vi) => { const N = 10; const meshes = c.parts.map(([g, m]) => { const im = new THREE.InstancedMesh(g, m, N); im.frustumCulled = false; root.add(im); return im; });
       for (let i = 0; i < N; i++) { const L = lanes[(i + vi) % 3]; cars.push({ v: vi, i, r: L[0] + (rnd() - 0.5) * 12, y: L[1] + (rnd() - 0.5) * 6, dir: L[2], a: rnd() * TAU, w: (14 + rnd() * 10) / L[0] }); }
       carMeshes.push(meshes); });
