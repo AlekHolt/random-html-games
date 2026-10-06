@@ -103,11 +103,32 @@ The system has ten bodies, from the sun outwards:
 | **Kryo-7** | Frozen moon of Okara | Snowfields, ice shards, frost trees, Okara filling the sky |
 | **Crysalis** | Prismatic anomaly | Pale glass plains with iridescent spires, crystal trees and shards |
 
-The two city worlds can't be docked at yet: their districts, trade and people arrive in the next
-update. Three asteroid fields drift alongside Eden (Verdant Drift), Noctis (Kessler Reach) and Okara
+Three asteroid fields drift alongside Eden (Verdant Drift), Noctis (Kessler Reach) and Okara
 (Okara Shoals).
 
 ![Kryo-7](screenshots/kryo.jpg)
+
+### Trade and the city worlds
+
+You start with 300 credits (CR) and a 24-unit cargo hold.
+
+- **Resources.** Every wild world has its own deposit, mined like crystals but into the hold:
+  - Viridium (Eden), Solanium (Sahri), Coralite (Thalassa), Sulphurine (Vharun)
+  - Lumenite (Umbra), Cryonite (Kryo-7), Prismite (Crysalis)
+
+  About one asteroid in five carries **Ferrite**, and a rare gold one carries **Aurium**.
+- **Docking.** Press `E` near Aurelia or Noctis to dock, then walk the district. Press `E` at a kiosk:
+  - **Trade Broker.** Sell cargo and buy fuel. Aurelia pays for luxuries (Prismite, Lumenite, Coralite,
+    Aurium); Noctis pays for industry (Sulphurine, Cryonite, Solanium, Ferrite). Selling lowers a
+    market's price, which recovers over a few minutes.
+  - **Contracts.** Up to three jobs at a time: deliver goods, courier a sealed parcel to the other city,
+    or decode a given world's waystone.
+  - **Bar.** Rumours about where things sell.
+  - **Black Market** (Noctis only). Neon Dust is cheap here; only a discreet buyer in Aurelia's bar
+    takes it.
+
+  The shipwright and outfitter open in the next update.
+- **Saves.** Credits, cargo and active contracts are saved with the voyage.
 
 ## How it's built
 
