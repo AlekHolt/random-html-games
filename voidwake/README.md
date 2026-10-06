@@ -127,8 +127,21 @@ You start with 300 credits (CR) and a 24-unit cargo hold.
   - **Black Market** (Noctis only). Neon Dust is cheap here; only a discreet buyer in Aurelia's bar
     takes it.
 
-  The shipwright and outfitter open in the next update.
-- **Saves.** Credits, cargo and active contracts are saved with the voyage.
+  - **Shipwright.** Five hulls from Phobos's lineup, each with half the old ship's price as trade-in:
+
+    | Ship | Class | Price | Cargo | Character |
+    | --- | --- | --- | --- | --- |
+    | Vanta | Fighter | starter | 24 | Balanced |
+    | Mule | Hauler | 16,000 | 64 | Slow, huge hold |
+    | Pathfinder | Explorer | 22,000 | 36 | +20% pulse, −40% fuel use |
+    | Razor | Interceptor | 30,000 (Noctis only) | 16 | +30% speed, +60% mining |
+    | Solaris | Luxury yacht | 55,000 (Aurelia only) | 40 | +30% pulse, +20% speed |
+
+    The display pad shows any hull before you buy it.
+  - **Outfitter.** Eight paint jobs (200 CR), cargo pods (+8, up to two), a fuel recycler (−25% burn) and
+    beam focus (+40% mining).
+- **Traffic.** Freighters, shuttles, Aurelia police and Noctis interceptors circle the city worlds.
+- **Saves.** Credits, cargo, contracts, your ship, its paint and upgrades are saved with the voyage.
 
 ## How it's built
 

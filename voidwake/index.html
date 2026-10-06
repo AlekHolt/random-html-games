@@ -1772,7 +1772,8 @@ const World = {
   time: 420, fuel: 100, carbon: 0, discovered: new Set(), navTarget: 'eden', lastBody: 'eden',
   glyphs: new Set(), surveyed: new Set(), surveyDone: false,
   stats: { mined: 0, asteroids: 0, earned: 0, contracts: 0 },
-  credits: 300, cargo: {}, market: { aurelia: {}, noctis: {} }, board: {}, contracts: [], seq: 0, dust: 6
+  credits: 300, cargo: {}, market: { aurelia: {}, noctis: {} }, board: {}, contracts: [], seq: 0, dust: 6,
+  ship: { cls: 'vanta', paint: 0 }, upg: { pods: 0, recycler: 0, focus: 0 }
 };
 
 /* Halcyon Survey, the voyage's goal: land on every wild world, decode each world's Ancient Waystone,
@@ -1807,7 +1808,9 @@ const Save = {
       if (BODIES.some((bd) => bd.id === d.navTarget)) World.navTarget = d.navTarget;
       if (d.stats) { World.stats.mined = d.stats.mined | 0; World.stats.asteroids = d.stats.asteroids | 0; World.stats.earned = d.stats.earned | 0; World.stats.contracts = d.stats.contracts | 0; }
       if (Number.isFinite(+d.credits)) World.credits = Math.max(0, Math.floor(+d.credits));
-      if (d.cargo && typeof d.cargo === 'object') for (const id of Object.keys(GOODS)) { const n = Math.floor(+d.cargo[id]) || 0; if (n > 0 && cargoUsed() + n <= CARGO_CAP) World.cargo[id] = n; }
+      if (d.ship && Object.prototype.hasOwnProperty.call(SHIPS, d.ship.cls)) World.ship = { cls: d.ship.cls, paint: clamp(d.ship.paint | 0, 0, PAINTS.length - 1) };
+      if (d.upg) for (const u in UPGRADES) World.upg[u] = clamp(d.upg[u] | 0, 0, UPGRADES[u].max);
+      if (d.cargo && typeof d.cargo === 'object') for (const id of Object.keys(GOODS)) { const n = Math.floor(+d.cargo[id]) || 0; if (n > 0 && cargoUsed() + n <= cargoCap()) World.cargo[id] = n; }
       if (Array.isArray(d.contracts)) World.contracts = d.contracts.filter((c) => c && ['deliver', 'courier', 'glyph'].includes(c.kind) && BODY[c.to] && BODY[c.to].city
         && typeof c.title === 'string' && Number.isFinite(+c.reward) && (c.kind !== 'deliver' || (tradeable(c.good) && c.n > 0)) && (c.kind !== 'glyph' || WILD.some((b) => b.id === c.world))).slice(0, 3)
         .map((c) => ({ id: ++World.seq, kind: c.kind, to: c.to, title: c.title.slice(0, 120), reward: Math.floor(+c.reward), good: c.good, n: c.n | 0, world: c.world }));
@@ -1818,7 +1821,7 @@ const Save = {
     try {
       localStorage.setItem(this.KEY, JSON.stringify({
         v: 1, carbon: World.carbon, fuel: Math.round(World.fuel * 10) / 10, surveyDone: World.surveyDone, stats: World.stats, navTarget: World.navTarget,
-        credits: World.credits, cargo: World.cargo, contracts: World.contracts,
+        credits: World.credits, cargo: World.cargo, contracts: World.contracts, ship: World.ship, upg: World.upg,
         discovered: [...World.discovered], glyphs: [...World.glyphs], surveyed: [...World.surveyed]
       }));
     } catch (e) { /* storage unavailable: progress just isn't kept */ }
@@ -1829,7 +1832,8 @@ function resetVoyage() {
   Object.assign(World, { fuel: 100, carbon: 0, surveyDone: false, navTarget: 'eden', lastBody: 'eden' });
   World.discovered.clear(); World.glyphs.clear(); World.surveyed.clear();
   World.stats.mined = 0; World.stats.asteroids = 0; World.stats.earned = 0; World.stats.contracts = 0;
-  Object.assign(World, { credits: 300, cargo: {}, market: { aurelia: {}, noctis: {} }, board: {}, contracts: [], dust: 6 });
+  Object.assign(World, { credits: 300, cargo: {}, market: { aurelia: {}, noctis: {} }, board: {}, contracts: [], dust: 6,
+    ship: { cls: 'vanta', paint: 0 }, upg: { pods: 0, recycler: 0, focus: 0 } });
   Save.clear();
 }
 
@@ -2457,7 +2461,8 @@ function createSpace(opts) {
   });
 
   /* ship */
-  const shipModel = buildShipModel(env);
+  const shipModel = buildPlayerShip(env), camK = clamp(shipModel.length / 8.6, 1, 2);
+  shipModel.gear.visible = false;
   scene.add(shipModel.group);
   const ship = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), quat: new THREE.Quaternion(), ang: new THREE.Vector3(),
     stick: new THREE.Vector2(), throttle: 0, boost: 0, wasBoost: false, shake: 0 };
@@ -2718,8 +2723,8 @@ function createSpace(opts) {
     if (pulse.state === 'on') {
       if (fIn < 0) dropPulse('');
       else {
-        pulse.speed = Math.min(PULSE_SPEED, pulse.speed + 4200 * dt);
-        World.fuel = Math.max(0, World.fuel - 0.15 * dt);
+        pulse.speed = Math.min(pulseTop(), pulse.speed + 4200 * shipStat('pulse') * dt);
+        World.fuel = Math.max(0, World.fuel - 0.15 * burnMul() * dt);
         if (World.fuel <= 0) dropPulse('Fuel depleted');
         // drop out inside a world's approach zone, but only if the nose is pointing into it: a course that
         // just grazes the zone (or leaves the world you started at) keeps pulsing
@@ -2749,7 +2754,7 @@ function createSpace(opts) {
     const boost = ctrl && fIn > 0 && (k.down('ShiftLeft') || k.down('ShiftRight')) && World.fuel > 0;
     if (boost && !ship.wasBoost) Sound.boost();
     ship.wasBoost = boost;
-    let thrust = fIn > 0 ? (boost ? 430 : 105) : fIn < 0 ? -80 : 0;
+    let thrust = (fIn > 0 ? (boost ? 430 : 105) : fIn < 0 ? -80 : 0) * shipStat('speed');
     if (World.fuel <= 0 && fIn !== 0) { thrust *= 0.2; tel.noFuel = true; }
     const strafeX = ctrl ? (k.down('ArrowRight') ? 1 : 0) - (k.down('ArrowLeft') ? 1 : 0) : 0;
     const strafeY = ctrl ? (k.down('ArrowUp') ? 1 : 0) - (k.down('ArrowDown') ? 1 : 0) : 0;
@@ -2770,7 +2775,7 @@ function createSpace(opts) {
       if (trueR > BOUNDARY) ship.vel.addScaledVector(n, -Math.min(60, (trueR - BOUNDARY) * 0.6) * dt);
       if (trueR > BOUNDARY + 400) ship.pos.addScaledVector(n, BOUNDARY + 400 - trueR);
     }
-    if (fIn > 0) World.fuel = Math.max(0, World.fuel - dt * (boost ? 1.9 : 0.42) * burn);
+    if (fIn > 0) World.fuel = Math.max(0, World.fuel - dt * (boost ? 1.9 : 0.42) * burn * burnMul());
     ship.vel.addScaledVector(acc, dt);
     const fwdSpeed = ship.vel.dot(V.fwd);
     V.c.copy(ship.vel).addScaledVector(V.fwd, -fwdSpeed).multiplyScalar(1 - Math.exp(-2.2 * dt));
@@ -2781,7 +2786,7 @@ function createSpace(opts) {
     const closing = ship.vel.dot(V.b) < 0;
     const brake = closing ? smooth(nb.o.b.radius * 0.15 + 30, nb.o.b.radius * 1.2 + 260, nb.surf) : 1;
     tel.braking = brake < 0.98 && thrust > 0;
-    const maxS = lerp(70, boost ? 780 : 240, brake), spd = ship.vel.length();
+    const maxS = lerp(70, (boost ? 780 : 240) * shipStat('speed'), brake), spd = ship.vel.length();
     if (spd > maxS) ship.vel.multiplyScalar(lerp(1, maxS / spd, 1 - Math.exp(-(brake < 0.98 ? 3 : 1.6) * dt)));
     if (thrust === 0) ship.vel.multiplyScalar(Math.exp(-0.12 * dt));
     ship.pos.addScaledVector(ship.vel, dt);
@@ -2828,7 +2833,7 @@ function createSpace(opts) {
     });
     if (hit) {
       const r = hit.rock;
-      r.hp -= 70 * dt;
+      r.hp -= 70 * mineMul() * dt;
       for (let i = 0; i < 3; i++) sparks.emit(end.x, end.y, end.z, (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60,
         Math.random() < 0.5 ? [6, 1.2, 0.3] : [4, 2.5, 1.2], 1.2 + Math.random() * 1.5, 0.35 + Math.random() * 0.4);
       if (r.hp <= 0) {
@@ -2853,7 +2858,7 @@ function createSpace(opts) {
 
   function updateCamera(dt) {
     const spdN = clamp(ship.vel.length() / 780, 0, 1);
-    const pulseN = pulse.state === 'on' ? clamp(pulse.speed / PULSE_SPEED, 0, 1) : 0;
+    const pulseN = pulse.state === 'on' ? clamp(pulse.speed / pulseTop(), 0, 1) : 0;
     if (mode === 'intro') {
       introT += dt;
       const a = 0.55 + Math.sin(introT * 0.05) * 0.35;
@@ -2863,7 +2868,7 @@ function createSpace(opts) {
       camera.fov = 55;
     } else {
       camQ.slerp(ship.quat, 1 - Math.exp(-7 * dt));
-      camOff.set(0, 3.3, 15 + spdN * 5 + ship.boost * 2 + pulseN * 4);
+      camOff.set(0, 3.3 * camK, (15 + spdN * 5 + ship.boost * 2 + pulseN * 4) * camK);
       V.a.copy(camOff).applyQuaternion(camQ).add(ship.pos);
       V.q.copy(camQ).multiply(pitchDown);
       if (blendT < 1) {
@@ -2938,7 +2943,7 @@ function createSpace(opts) {
     tel.speed = ship.vel.length();
     tel.speedN = clamp(tel.speed / 780, 0, 1);
     tel.throttle = ship.throttle; tel.boostAmt = ship.boost;
-    tel.pulse = pulse.state; tel.pulseN = pulse.state === 'on' ? pulse.speed / PULSE_SPEED : pulse.state === 'spool' ? pulse.t / 1.4 : 0;
+    tel.pulse = pulse.state; tel.pulseN = pulse.state === 'on' ? pulse.speed / pulseTop() : pulse.state === 'spool' ? pulse.t / 1.4 : 0;
     if (pulseNote) { tel.pulseNote = pulseNote; pulseNote = ''; }
     tel.pos = ship.pos;
     tel.truePos = V.c.copy(origin).add(ship.pos);
@@ -2950,15 +2955,45 @@ function createSpace(opts) {
     if (nav) {
       const dist = Math.max(0, ship.pos.distanceTo(nav.pos) - nav.b.radius);
       const rate = pulse.state === 'on' ? pulse.speed : Math.max(tel.speed, 1);
-      tel.nav = { b: nav.b, dist, eta: dist / (pulse.state === 'off' ? Math.max(tel.speed, 1) : PULSE_SPEED), pulseEta: dist / PULSE_SPEED + 3, rate };
+      tel.nav = { b: nav.b, dist, eta: dist / (pulse.state === 'off' ? Math.max(tel.speed, 1) : pulseTop()), pulseEta: dist / pulseTop() + 3, rate };
     }
+    updateTraffic(dt);
     return tel;
+  }
+
+  /* traffic: shuttles, freighters and patrols circling the city worlds. Only drawn within 36k u, where
+     the city is still in unscaled space (beyond that, the planet is drawn scaled and they'd sit wrong). */
+  const TRAFFIC = { aurelia: ['freighter', 'shuttle', 'shuttle', 'shuttle', 'police', 'police', 'solaris'], noctis: ['freighter', 'shuttle', 'shuttle', 'razor', 'razor', 'mule'] };
+  const traffic = [], TV = new THREE.Vector3(), TW = new THREE.Vector3(), TM = new THREE.Matrix4(), TUP = new THREE.Vector3(0, 1, 0);
+  if (mode !== 'intro') for (const city in TRAFFIC) {
+    const o = bodyById[city];
+    TRAFFIC[city].forEach((cls, i) => {
+      const rnd = mulberry32(i * 31 + city.length * 977);
+      const m = PHOBOS_VW.buildShip(THREE, cls, { env, role: cls === 'police' ? 'police' : 'npc' });
+      m.gear.visible = false; m.group.visible = false; scene.add(m.group);
+      const big = cls === 'freighter';
+      traffic.push({ m, o, r: o.b.radius + (big ? 2400 : 700 + rnd() * 2200), a: rnd() * TAU, dir: rnd() < 0.5 ? 1 : -1,
+        w: (big ? 45 : 120 + rnd() * 150) / (o.b.radius + 1800), tilt: new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.8, rnd() * TAU, (rnd() - 0.5) * 0.8)) });
+    });
+  }
+  function updateTraffic(dt) {
+    for (const t of traffic) {
+      const vis = ship.pos.distanceTo(t.o.pos) < 36000;
+      t.m.group.visible = vis;
+      t.a += t.w * t.dir * dt;
+      if (!vis) continue;
+      TV.set(Math.cos(t.a) * t.r, 0, Math.sin(t.a) * t.r).applyQuaternion(t.tilt).add(t.o.pos);
+      TW.set(Math.cos(t.a + 0.02 * t.dir) * t.r, 0, Math.sin(t.a + 0.02 * t.dir) * t.r).applyQuaternion(t.tilt).add(t.o.pos);
+      t.m.group.position.copy(TV);
+      t.m.group.quaternion.setFromRotationMatrix(TM.lookAt(TV, TW, TUP));
+      t.m.setThrust(0.55, 0, World.time);
+    }
   }
 
   // position everything immediately so the very first frame (and any launch blend) starts from a valid pose
   computePositions(World.time);
   updateCamera(0);
-  if (mode === 'flight') { camera.position.copy(camOff.set(0, 3.3, 15)).applyQuaternion(ship.quat).add(ship.pos); camera.quaternion.copy(ship.quat).multiply(pitchDown); }
+  if (mode === 'flight') { camera.position.copy(camOff.set(0, 3.3 * camK, 15 * camK)).applyQuaternion(ship.quat).add(ship.pos); camera.quaternion.copy(ship.quat).multiply(pitchDown); }
   placeBodies(World.time);
 
   /* system map data: true positions in the sun's frame */
@@ -4267,6 +4302,391 @@ vec3 npcRotX(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x, c
   };
 })();
 
+/* ships · integrated from Designer - Phobos/assets/voidwake (viewer previews removed) */
+/* ships · Phobos · v1 · voidwake
+   Ship lineup for shipyards, traffic and light combat. Forward = -Z, metres, +Y up.
+
+   window.PHOBOS_VW.buildShip(THREE, cls, opts) → {
+       group, gear, plumes, plumeMat, nozzles, guns, setThrust(v, boost, time),     ← same shape as the game's buildShipModel
+       radius, length, setPaint({ primary, secondary, accent }), materials, cls, role, landable }
+     cls  'vanta' (fighter: the current ship, now paintable) · 'mule' (hauler) · 'pathfinder' (explorer) ·
+          'solaris' (luxury yacht) · 'razor' (interceptor) · 'freighter' (~72 m NPC) · 'shuttle' (~8 m NPC) ·
+          'police' (~14 m cruiser) · 'pirate' (scrapped-up razor)
+     opts { env, paint: { primary, secondary, accent } (hex or Color), role: 'player' | 'npc' | 'pirate' | 'police' }
+          role 'pirate' adds scrap plates and nose spikes to any class.
+   Draw calls: NPC classes 3 (hull, glow, plumes) · player classes 4 (+ glass canopy) · +1 gear mesh while parked.
+   Paint: one hull material; a per-vertex slot picks primary / secondary / accent (accent can be chrome via
+   opts.paint.accentMetal) or a fixed colour, so setPaint() recolours instantly with no rebuild.
+   Glow: one material for nav lights, strips, nozzles (driven by thrust) and police light bars / freighter strobes.
+   Gear pads bottom out at y = -2.5 for every landable class (the freighter doesn't land: empty gear group).
+
+   Uses the game's model kit by name (xf, mergeTinted, tintByNormal, loftHull, lathe, lin, mulberry32, TAU). */
+(() => {
+  const VW = (window.PHOBOS_VW = window.PHOBOS_VW || {});
+  // paint-slot marker colours (never occur naturally): primary (s,0,s) · secondary (0,s,s) · accent (s,s,0); s = panel shade
+  const PR = (s) => new THREE.Color(s === undefined ? 1 : s, 0, s === undefined ? 1 : s);
+  const SE = (s) => new THREE.Color(0, s === undefined ? 1 : s, s === undefined ? 1 : s);
+  const AC = (s) => new THREE.Color(s === undefined ? 1 : s, s === undefined ? 1 : s, 0);
+  const DARK = lin(0x262b36), GREY = lin(0x6f7682), GLASS = lin(0x0a1428), RUST = lin(0x6a3a22), RUST2 = lin(0x4a4038), BLACK = lin(0x111216);
+  const HDR = (r, g, b) => new THREE.Color(r, g, b);
+
+  /* ---------------------------------------------------------------- materials */
+  function PAINT(sh) {
+    const u = this.userData.paint;
+    Object.assign(sh.uniforms, { uP: { value: u.p }, uS: { value: u.s }, uA: { value: u.a }, uAccMetal: u.accMetal });
+    sh.vertexShader = 'attribute float aPaint;\nvarying float vPaint;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vPaint = aPaint;');
+    sh.fragmentShader = 'uniform vec3 uP, uS, uA;\nuniform float uAccMetal;\nvarying float vPaint;\n' + sh.fragmentShader
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        if (vPaint > 0.5) diffuseColor.rgb = (vPaint < 1.5 ? uP : vPaint < 2.5 ? uS : uA) * vColor.r;`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        if (vPaint > 2.5) roughnessFactor = mix(roughnessFactor, 0.12, uAccMetal);`)
+      .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
+        if (vPaint > 2.5) metalnessFactor = mix(metalnessFactor, 0.95, uAccMetal);`);
+  }
+  function GLOW(sh) {
+    const u = this.userData.glow;
+    Object.assign(sh.uniforms, { uNozzle: u.nozzle, uFlash: u.flash });
+    sh.vertexShader = 'attribute float aGlow;\nvarying float vGlowK;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vGlowK = aGlow;');
+    sh.fragmentShader = 'uniform vec3 uNozzle;\nuniform vec3 uFlash;\nvarying float vGlowK;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      diffuseColor.rgb *= vGlowK < 0.5 ? vec3(1.0) : vGlowK < 1.5 ? uNozzle : vGlowK < 2.5 ? vec3(uFlash.x) : vGlowK < 3.5 ? vec3(uFlash.y) : vec3(uFlash.z);`);
+  }
+  const plumeShader = () => new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uTime: { value: 0 }, uThrust: { value: 0.3 }, uBoost: { value: 0 }, uLen: { value: 1 }, uWide: { value: 1 } },
+    vertexShader: `attribute vec4 aBase; uniform float uLen, uWide; varying float vT; varying vec3 vN; varying vec3 vV;
+      void main(){ vec3 p = position - aBase.xyz; p.xy *= uWide; p.z *= uLen; vT = (position.z - aBase.z) / aBase.w;
+        vec4 mv = modelViewMatrix * vec4(aBase.xyz + p, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float uTime, uThrust, uBoost; varying float vT; varying vec3 vN; varying vec3 vV;
+      void main(){
+        float flick = 0.82 + 0.18 * sin(uTime * 63.0 + vT * 22.0) * sin(uTime * 41.0);
+        float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.5);
+        vec3 a = mix(vec3(0.6, 2.6, 4.0), vec3(3.5, 1.4, 4.2), uBoost);
+        vec3 col = mix(a * 3.0, vec3(0.2, 0.4, 1.2), clamp(vT, 0.0, 1.0)) * pow(1.0 - clamp(vT, 0.0, 1.0), 1.6);
+        gl_FragColor = vec4(col * edge * flick * uThrust, 1.0);
+      }`
+  });
+
+  /* ---------------------------------------------------------------- spec helpers */
+  function Spec() {
+    const s = { H: [], G: [], glass: [], gear: [], engines: [], guns: [] };
+    s.box = (w, h, d, x, y, z, rx, ry, rz) => xf(new THREE.BoxGeometry(w, h, d), x, y, z, rx, ry, rz);
+    s.cylZ = (rRear, rFront, len, seg, x, y, z) => xf(new THREE.CylinderGeometry(rRear, rFront, len, seg), x, y, z, Math.PI / 2, 0, 0);
+    s.h = (g, c) => { s.H.push([g, c]); return g; };
+    s.g = (g, c, kind) => { s.G.push([g, c, kind || 0]); return g; };
+    // engine: dark bell (closed lathe ring), secondary-paint collar, nozzle disc (thrust glow) and plume of radius r at (x, y, z)
+    s.engine = (x, y, z, r, collar) => {
+      s.h(xf(lathe([[r * 1.17, 0], [r * 1.25, r * 1.05], [r * 1.05, r * 1.05], [r * 0.9, 0]], 14), x, y, z - 0.2 * r, Math.PI / 2, 0, 0), DARK);
+      s.h(xf(new THREE.TorusGeometry(r * 1.25, r * 0.14, 5, 16), x, y, z - 0.25 * r), collar || SE(1));
+      s.g(xf(new THREE.CircleGeometry(r, 18), x, y, z + 0.35 * r), HDR(1, 1, 1), 1);
+      s.engines.push({ x, y, z: z + 0.38 * r, r });
+    };
+    s.nav = (x, y, z) => { s.g(xf(new THREE.SphereGeometry(0.12, 8, 6), -x, y, z), HDR(6, 0.3, 0.3)); s.g(xf(new THREE.SphereGeometry(0.12, 8, 6), x, y, z), HDR(0.3, 6, 0.6)); };
+    // landing leg: housing, piston to the pad, brace, pad + hazard ring; pad bottom at y = -2.5
+    s.leg = (x, top, z, k) => {
+      k = k || 1;
+      s.gear.push([xf(new THREE.CylinderGeometry(0.15 * k, 0.15 * k, 0.7, 8), x, top - 0.35, z), GREY]);
+      s.gear.push([xf(new THREE.CylinderGeometry(0.075 * k, 0.075 * k, top + 1.8, 8), x, (top - 3.0) / 2, z), lin(0xd9d4c9)]);
+      s.gear.push([s.box(0.08 * k, Math.max(0.4, top + 1.5), 0.08 * k, x, (top - 2.2) / 2, z + 0.3, -0.35, 0, 0), DARK]);
+      s.gear.push([xf(new THREE.CylinderGeometry(0.4 * k, 0.46 * k, 0.1, 10), x, -2.45, z), DARK]);
+      s.gear.push([xf(new THREE.CylinderGeometry(0.3 * k, 0.38 * k, 0.06, 10), x, -2.37, z), lin(0xf0b429)]);
+    };
+    s.wing = (pts, sign, thick, y, dihedral, top, side, bottom) => {
+      if (sign < 0) pts = pts.map(([x, z]) => [-x, z]).reverse();
+      const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z))), { depth: thick, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 1 });
+      g.rotateX(Math.PI / 2); g.translate(0, thick / 2, 0);
+      return s.h(tintByNormal(xf(g, 0, y, 0, 0, 0, -sign * dihedral), top || PR(1), side || lin(0x6f7682), bottom || DARK), null);   // dihedral > 0 droops the tips
+    };
+    return s;
+  }
+
+  /* ---------------------------------------------------------------- classes */
+  const CLASSES = {
+    vanta(s) {   // the current Voidwake fighter, rebuilt on paint slots (default paint reproduces the original livery)
+      const W = PR(1), P1 = PR(0.9), P2 = PR(1.05), O = SE(1), Hz = AC(1);
+      s.h(loftHull([[-4.95, 0.10, 0.07, -0.08, 0.4], [-4.45, 0.42, 0.28, -0.04, 0.45], [-3.5, 0.78, 0.5, 0.0, 0.42], [-2.3, 1.02, 0.66, 0.06, 0.36],
+        [-0.8, 1.16, 0.76, 0.08, 0.32], [0.9, 1.12, 0.74, 0.06, 0.32], [2.2, 0.92, 0.6, 0.04, 0.36], [3.05, 0.62, 0.42, 0.02, 0.42]],
+        (f, sg) => (f < 0 || (f >= 3 && f <= 5) ? DARK : (f === 2 || f === 6) && (sg === 3 || sg === 4) ? O : f === 0 ? (sg % 2 ? P2 : W) : sg % 2 ? W : P1)), null);
+      s.h(s.box(0.5, 0.05, 0.5, 0, -0.6, -3.6), GREY); s.h(s.box(0.9, 0.12, 1.6, 0, -0.66, -1.2), DARK);
+      const CAN = [[-3.45, 0.2, 0.08, 0.5, 0.5], [-2.9, 0.5, 0.26, 0.62, 0.5], [-2.0, 0.64, 0.4, 0.7, 0.55], [-1.05, 0.6, 0.4, 0.72, 0.55], [-0.35, 0.42, 0.26, 0.7, 0.5]];
+      s.glass.push(loftHull(CAN));
+      CAN.slice(1, 4).forEach(([z, w, h, y, c]) => s.h(loftHull([[z - 0.06, w * 1.06, h * 1.07, y, c], [z + 0.06, w * 1.06, h * 1.07, y, c]]), DARK));
+      s.h(loftHull(CAN.map(([z, w, h, y]) => [z, 0.04, 0.035, y + h + 0.01, 0])), DARK);
+      s.h(loftHull([[-0.6, 0.3, 0.08, 0.86, 0.4], [-0.3, 0.42, 0.2, 0.92, 0.4], [1.8, 0.42, 0.22, 0.9, 0.4], [2.6, 0.3, 0.14, 0.8, 0.5]], (f) => (f === 0 ? O : f < 0 || (f >= 3 && f <= 5) ? DARK : f === 1 || f === 7 ? P1 : W)), null);
+      [0.15, 0.55, 0.95].forEach((z) => s.h(s.box(0.44, 0.05, 0.14, 0, 1.13, z), DARK));
+      s.h(s.box(0.06, 0.5, 0.06, 0.24, 1.32, 1.9), GREY); s.g(s.box(0.08, 0.08, 0.08, 0.24, 1.6, 1.9), HDR(0.45, 2.4, 3.4));
+      [1, -1].forEach((sg) => {
+        s.h(loftHull([[-1.7, 0.26, 0.28, 0.12, 0.35], [-1.3, 0.3, 0.34, 0.12, 0.3], [-0.1, 0.32, 0.36, 0.1, 0.3], [0.9, 0.24, 0.28, 0.08, 0.45]], (f) => (f === -1 ? DARK : f === 0 || f === 7 || f === 1 ? P1 : f >= 3 && f <= 5 ? DARK : W)).translate(sg * 1.08, 0, 0), null);
+        s.wing([[0.8, -1.6], [2.2, -0.6], [4.9, 1.3], [5.3, 2.3], [3.1, 2.2], [0.8, 2.6]], sg, 0.16, -0.13, 0.06);
+        const tip = (x) => -x * 0.06 + 0.015;
+        s.h(s.box(2.6, 0.05, 0.3, sg * 2.9, tip(2.9), 0.62, 0, sg * -0.5, sg * -0.06), O); s.h(s.box(0.9, 0.05, 0.16, sg * 4.3, tip(4.3), 1.95, 0, sg * -0.5, sg * -0.06), Hz);
+        s.h(loftHull([[0.0, 0.12, 0.12, 0, 0.5], [0.4, 0.22, 0.24, 0, 0.4], [2.6, 0.22, 0.24, 0, 0.4], [3.0, 0.13, 0.14, 0, 0.5]], (f) => (f < 0 || (f >= 3 && f <= 5) ? DARK : f === 0 ? W : f === 1 || f === 7 ? P1 : GREY)).translate(sg * 5.15, -0.32, 0), null);
+        s.h(s.box(0.04, 0.5, 0.7, sg * 5.15, 0.0, 2.4), O); s.g(s.box(0.02, 0.04, 1.4, sg * 5.38, -0.32, 1.5), HDR(0.45, 2.4, 3.4));
+        s.h(loftHull([[-0.45, 0.1, 0.09, 0, 0.5], [-0.2, 0.16, 0.14, 0, 0.4], [1.0, 0.16, 0.14, 0, 0.4], [1.3, 0.1, 0.1, 0, 0.5]], (f) => (f === 0 ? GREY : DARK)).translate(sg * 3.2, -0.42, 0), null);
+        s.h(s.cylZ(0.055, 0.055, 0.9, 8, sg * 3.2, -0.42, -0.88), GREY); s.h(s.cylZ(0.085, 0.08, 0.14, 8, sg * 3.2, -0.42, -1.37), DARK);
+        s.guns.push(new THREE.Vector3(sg * 3.2, -0.42, -1.45));
+        const fin = new THREE.ExtrudeGeometry(new THREE.Shape([[0, 0], [1.7, 0], [2.15, 1.55], [1.6, 1.8], [1.15, 1.8]].map(([x, y]) => new THREE.Vector2(x, y))), { depth: 0.08, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.03, bevelSegments: 1 });
+        fin.rotateY(-Math.PI / 2); s.h(tintByNormal(xf(fin, sg * 0.8, 0.55, 1.0, 0, 0, sg * -0.38), P1, O, DARK), null);
+        s.h(loftHull([[0.3, 0.4, 0.38, 0, 0.45], [0.8, 0.56, 0.52, 0, 0.4], [2.6, 0.56, 0.52, 0, 0.4], [3.05, 0.5, 0.46, 0, 0.45]], (f) => (f < 0 || (f >= 3 && f <= 5) ? DARK : f === 0 ? P1 : f === 1 || f === 7 ? W : GREY)).translate(sg * 1.0, -0.05, 0), null);
+        s.h(s.box(0.08, 0.1, 1.6, sg * 1.0, 0.5, 1.7), DARK);
+        s.engine(sg * 1.0, -0.05, 3.05, 0.4, O);
+      });
+      s.h(s.box(0.62, 0.3, 0.5, 0, 0.3, 2.85), DARK); [-0.24, -0.12, 0, 0.12, 0.24].forEach((x) => s.h(s.box(0.03, 0.2, 0.46, x, 0.55, 2.85), GREY));
+      s.g(s.box(0.5, 0.04, 0.02, 0, 0.16, 3.11), HDR(0.45, 2.4, 3.4));
+      s.nav(5.15, -0.32, -0.04);
+      [[0, -0.55, -2.6], [1.8, -0.35, 1.4], [-1.8, -0.35, 1.4]].forEach(([x, t, z]) => s.leg(x, t, z));
+      return { paint: { primary: 0xd9d4c9, secondary: 0xe0521c, accent: 0xf0b429 }, length: 8.6, radius: 5.6 };
+    },
+
+    mule(s) {    // hauler: armoured cab, cargo spine with six containers, quad engines, stubby wings
+      const W = PR(1), P1 = PR(0.85);
+      s.h(loftHull([[-7.5, 1.1, 0.8, 0.45, 0.45], [-6.6, 1.6, 1.25, 0.55, 0.35], [-4.2, 1.8, 1.45, 0.6, 0.3], [-3.0, 1.7, 1.35, 0.6, 0.3]],
+        (f, sg) => (f < 0 || (f >= 3 && f <= 5) ? DARK : f === 1 || f === 7 ? (sg === 0 ? GLASS : P1) : f === 0 ? W : P1)), null);
+      s.h(s.box(2.4, 0.3, 0.3, 0, 1.9, -6.4, 0.5, 0, 0), GLASS);
+      s.h(s.box(1.3, 1.1, 10.5, 0, 0.6, 2.0), DARK);
+      for (let z = -2.5; z <= 7; z += 2.1) s.h(s.box(4.4, 0.25, 0.25, 0, 1.25, z), GREY);
+      const cols = [SE(1), AC(1), P1, SE(0.85), AC(0.85), W];
+      [-1, 1].forEach((sg, si) => [-1.4, 1.8, 5.0].forEach((z, zi) => {
+        const c = cols[(si * 3 + zi) % 6];
+        s.h(s.box(1.8, 1.8, 3.0, sg * 1.6, 0.6, z), c);
+        [-1.1, 0, 1.1].forEach((dz) => s.h(s.box(1.86, 1.86, 0.08, sg * 1.6, 0.6, z + dz), DARK));
+      }));
+      s.h(loftHull([[6.6, 1.8, 1.0, 0.6, 0.3], [8.4, 1.9, 1.1, 0.6, 0.3], [8.9, 1.7, 1.0, 0.6, 0.35]], (f) => (f < 0 || (f >= 3 && f <= 5) ? DARK : W)), null);
+      [[-0.95, 0.15], [0.95, 0.15], [-0.95, 1.05], [0.95, 1.05]].forEach(([x, y]) => s.engine(x, y, 8.9, 0.42));
+      [-1, 1].forEach((sg) => {
+        s.h(s.box(2.6, 0.32, 3.0, sg * 3.6, 0.0, 3.2), W); s.h(s.box(0.5, 0.6, 3.4, sg * 5.0, 0.0, 3.2), DARK); s.h(s.box(0.06, 0.06, 2.4, sg * 5.27, 0.18, 3.2), AC(1));
+        s.h(s.box(0.5, 0.5, 1.0, sg * 1.9, 0.0, -4.6), DARK); s.h(s.cylZ(0.1, 0.1, 1.4, 8, sg * 1.9, 0.05, -5.6), GREY);
+        s.guns.push(new THREE.Vector3(sg * 1.9, 0.05, -6.35));
+        s.leg(sg * 2.3, -0.3, -4.2, 1.2); s.leg(sg * 3.6, -0.15, 3.2, 1.2);
+      });
+      s.g(s.box(0.06, 0.1, 9.0, 1.0, 1.32, 2.0), HDR(3.2, 2.0, 0.4)); s.g(s.box(0.06, 0.1, 9.0, -1.0, 1.32, 2.0), HDR(3.2, 2.0, 0.4));
+      s.nav(5.27, 0.0, 1.6);
+      return { paint: { primary: 0x8a8f96, secondary: 0xe0521c, accent: 0xf0b429 }, length: 16.4, radius: 8.6 };
+    },
+
+    pathfinder(s) {   // explorer: long slender hull, sensor dish, antenna array, drop tanks, winglets
+      const W = PR(1), P1 = PR(0.88), O = SE(1);
+      s.h(loftHull([[-7.0, 0.15, 0.12, 0, 0.4], [-6.0, 0.6, 0.45, 0, 0.45], [-3.5, 0.95, 0.7, 0.05, 0.4], [1.5, 0.9, 0.7, 0.05, 0.35], [4.5, 0.75, 0.6, 0, 0.4], [5.6, 0.5, 0.4, 0, 0.45]],
+        (f, sg) => (f < 0 || (f >= 3 && f <= 5) ? DARK : (f === 2 || f === 6) && (sg === 2 || sg === 3) ? O : f === 0 ? (sg % 2 ? W : P1) : W)), null);
+      const CAN = [[-5.2, 0.2, 0.06, 0.42, 0.5], [-4.6, 0.42, 0.22, 0.55, 0.5], [-3.2, 0.5, 0.32, 0.65, 0.55], [-1.6, 0.42, 0.26, 0.66, 0.5]];
+      s.glass.push(loftHull(CAN)); s.h(loftHull(CAN.map(([z, w, h, y]) => [z, 0.035, 0.03, y + h + 0.01, 0])), DARK);
+      // sensor dish on a mast, tilted forward, with an accent rim and feed horn
+      s.h(s.box(0.14, 1.0, 0.14, 0, 1.15, 0.6), GREY);
+      s.h(xf(lathe([[0.02, 0], [0.5, 0.12], [0.85, 0.32], [0.88, 0.3], [0.52, 0.09], [0.02, -0.03]], 14), 0, 1.75, 0.6, -0.7, 0, 0), W);
+      s.h(xf(new THREE.TorusGeometry(0.86, 0.04, 4, 18), 0, 1.75 + 0.3 * Math.cos(0.7), 0.6 - 0.3 * Math.sin(0.7), Math.PI / 2 - 0.7, 0, 0), AC(1));
+      s.h(xf(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 5), 0, 1.98, 0.42, -0.7, 0, 0), GREY);
+      [[0.4, 3.2, 0.8], [-0.4, 3.4, 0.6], [0, 3.8, 1.1]].forEach(([x, z, h]) => { s.h(s.box(0.04, h, 0.04, x, 0.7 + h / 2, z), GREY); s.g(s.box(0.07, 0.07, 0.07, x, 0.7 + h, z), HDR(3.6, 0.4, 0.3)); });
+      [-1, 1].forEach((sg) => {
+        s.wing([[0.8, -0.6], [3.0, 0.6], [5.6, 2.1], [5.8, 2.9], [3.4, 2.7], [0.8, 3.2]], sg, 0.12, -0.25, 0.04);
+        s.h(xf(new THREE.BoxGeometry(0.06, 0.9, 0.9), sg * 5.75, -0.6, 2.5, 0, 0, sg * 0.35), O);
+        s.h(xf(lathe([[0.01, -2.0], [0.24, -1.7], [0.3, -1.0], [0.3, 1.2], [0.2, 1.8], [0.01, 2.0]], 8), sg * 2.8, -0.75, 1.4, Math.PI / 2, 0, 0), O);
+        [-0.8, 0.8].forEach((dz) => s.h(xf(new THREE.CylinderGeometry(0.31, 0.31, 0.06, 8), sg * 2.8, -0.75, 1.4 + dz, Math.PI / 2, 0, 0), AC(1)));
+        s.h(s.box(0.08, 0.35, 0.5, sg * 2.8, -0.45, 1.4), DARK);
+        s.h(loftHull([[2.6, 0.38, 0.36, 0, 0.45], [3.4, 0.5, 0.48, 0, 0.4], [5.4, 0.5, 0.48, 0, 0.4], [5.9, 0.44, 0.42, 0, 0.45]], (f) => (f < 0 || (f >= 3 && f <= 5) ? DARK : P1)).translate(sg * 1.15, -0.05, 0), null);
+        s.engine(sg * 1.15, -0.05, 5.9, 0.36);
+        s.h(s.cylZ(0.05, 0.05, 1.0, 6, sg * 0.5, -0.55, -5.2), GREY); s.guns.push(new THREE.Vector3(sg * 0.5, -0.55, -5.75));
+      });
+      s.engine(0, 0.35, 5.6, 0.22);
+      s.nav(5.8, -0.2, 2.6);
+      [[0, -0.6, -4.0], [1.6, -0.45, 2.6], [-1.6, -0.45, 2.6]].forEach(([x, t, z]) => s.leg(x, t, z));
+      return { paint: { primary: 0xe8e4da, secondary: 0x2f8a9a, accent: 0xf0b429 }, length: 13.6, radius: 7.2 };
+    },
+
+    solaris(s) {   // luxury yacht: smooth teardrop, crescent wings, gold and chrome, long canopy
+      const W = PR(1), W2 = PR(0.9), G = SE(1), CH = AC(1);
+      s.h(loftHull([[-6.5, 0.1, 0.08, 0, 0.5], [-5.5, 0.62, 0.4, 0, 0.5], [-3.0, 1.1, 0.62, 0.05, 0.5], [0.5, 1.25, 0.68, 0.05, 0.5], [3.5, 0.92, 0.55, 0, 0.5], [5.3, 0.42, 0.3, 0, 0.5]],
+        (f, sg) => (f < 0 ? CH : f >= 3 && f <= 5 ? W2 : f === 0 && sg >= 2 && sg <= 3 ? G : W)), null);
+      const CAN = [[-4.6, 0.25, 0.06, 0.42, 0.5], [-3.8, 0.55, 0.26, 0.52, 0.5], [-2.0, 0.66, 0.36, 0.6, 0.55], [0.2, 0.6, 0.32, 0.62, 0.55], [1.4, 0.36, 0.18, 0.6, 0.5]];
+      s.glass.push(loftHull(CAN));
+      s.h(loftHull(CAN.map(([z, w, h, y]) => [z, w * 1.03, 0.02, y - 0.02, 0.5])), G);
+      // crescent wings: swept, curved trailing edge, gold leading edge, chrome tips
+      const crescent = [];
+      for (let i = 0; i <= 8; i++) { const t = i / 8; crescent.push([0.9 + t * 5.0, -0.8 + t * t * 3.6]); }
+      for (let i = 8; i >= 0; i--) { const t = i / 8; crescent.push([0.9 + t * 4.6, 1.6 + t * t * 2.0 + (1 - t) * 0.4]); }
+      [-1, 1].forEach((sg) => {
+        s.wing(crescent, sg, 0.1, -0.2, -0.05, W, W2, W2);
+        for (let i = 0; i < 8; i++) { const t0 = i / 8, t1 = (i + 1) / 8, x0 = 0.9 + t0 * 5, z0 = -0.8 + t0 * t0 * 3.6, x1 = 0.9 + t1 * 5, z1 = -0.8 + t1 * t1 * 3.6;
+          const len = Math.hypot(x1 - x0, z1 - z0); s.h(s.box(len, 0.05, 0.08, sg * (x0 + x1) / 2, -0.09 + 0.05 * (x0 + x1) / 2, (z0 + z1) / 2 - 0.06, 0, -sg * Math.atan2(z1 - z0, x1 - x0), 0), G); }
+        s.h(xf(lathe([[0.01, -0.5], [0.16, -0.3], [0.18, 0.4], [0.01, 0.7]], 10), sg * 5.9, -0.48, 2.9, Math.PI / 2, 0, 0), CH);
+        s.h(loftHull([[1.0, 0.42, 0.4, 0, 0.5], [1.6, 0.55, 0.5, 0, 0.5], [4.4, 0.55, 0.5, 0, 0.5], [5.0, 0.48, 0.44, 0, 0.5]], (f) => (f < 0 ? CH : W)).translate(sg * 1.25, -0.15, 0), null);
+        s.h(xf(new THREE.TorusGeometry(0.58, 0.05, 4, 18), sg * 1.25, -0.15, 2.0), G);
+        s.engine(sg * 1.25, -0.15, 5.0, 0.4, CH);
+        s.guns.push(new THREE.Vector3(sg * 1.6, -0.35, -2.4));
+      });
+      const fin = new THREE.ExtrudeGeometry(new THREE.Shape([[0, 0], [2.4, 0], [3.0, 1.6], [2.4, 1.7], [1.2, 0.9]].map(([x, y]) => new THREE.Vector2(x, y))), { depth: 0.08, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 1 });
+      fin.rotateY(-Math.PI / 2); s.h(tintByNormal(xf(fin, 0.04, 0.55, 1.6, 0, 0, 0), G, W, W), null);
+      s.g(s.box(0.02, 0.03, 4.0, 1.1, 0.05, -0.8), HDR(2.4, 1.8, 0.8)); s.g(s.box(0.02, 0.03, 4.0, -1.1, 0.05, -0.8), HDR(2.4, 1.8, 0.8));
+      s.nav(5.9, -0.48, 2.4);
+      [[0, -0.55, -3.4], [1.6, -0.4, 2.0], [-1.6, -0.4, 2.0]].forEach(([x, t, z]) => s.leg(x, t, z));
+      return { paint: { primary: 0xf4f1ea, secondary: 0xd9a441, accent: 0xe8eef2, accentMetal: 1 }, length: 12.4, radius: 6.8 };
+    },
+
+    razor(s) {    // interceptor: arrowhead hull, forward-swept blades, oversized cannons, big single engine
+      const B = PR(1), B2 = PR(0.8), R = SE(1);
+      s.h(loftHull([[-5.5, 0.08, 0.06, 0, 0.2], [-4.2, 0.45, 0.3, 0, 0.2], [-1.5, 0.75, 0.45, 0.05, 0.2], [1.5, 0.85, 0.5, 0.05, 0.2], [3.6, 0.72, 0.46, 0, 0.25]],
+        (f, sg) => (f < 0 || (f >= 3 && f <= 5) ? DARK : (f === 1 || f === 7) && sg >= 2 ? R : f === 0 ? B : B2)), null);
+      const CAN = [[-3.3, 0.15, 0.05, 0.3, 0.3], [-2.6, 0.32, 0.2, 0.42, 0.3], [-1.3, 0.34, 0.22, 0.48, 0.3], [-0.6, 0.22, 0.12, 0.46, 0.3]];
+      s.glass.push(loftHull(CAN));
+      [-1, 1].forEach((sg) => {
+        s.wing([[0.6, 2.4], [4.8, -0.9], [5.3, -0.5], [1.0, 3.3]], sg, 0.08, -0.05, -0.08, B, R, DARK);
+        s.g(s.box(3.6, 0.03, 0.04, sg * 2.9, 0.06 - sg * sg * 0.0, 0.8, 0, sg * 0.66, sg * 0.08), HDR(3.4, 0.4, 2.2));
+        s.h(xf(new THREE.BoxGeometry(0.06, 1.0, 1.3), sg * 0.55, -0.75, 2.4, 0, 0, sg * -0.5), R);
+        s.h(xf(new THREE.BoxGeometry(1.1, 0.05, 0.5), sg * 0.9, 0.05, -3.4, 0, sg * -0.4, 0), B2);
+        // oversized cannon: housing, long barrel, cooling rings, muzzle brake
+        s.h(loftHull([[-0.6, 0.18, 0.18, 0, 0.3], [1.4, 0.22, 0.22, 0, 0.3], [1.9, 0.16, 0.16, 0, 0.4]], (f) => (f === 0 ? R : DARK)).translate(sg * 1.5, 0.3, 0), null);
+        s.h(s.cylZ(0.09, 0.09, 3.6, 8, sg * 1.5, 0.3, -2.4), GREY);
+        [-1.4, -2.0, -2.6].forEach((z) => s.h(s.cylZ(0.14, 0.14, 0.08, 8, sg * 1.5, 0.3, z), DARK));
+        s.h(s.cylZ(0.16, 0.14, 0.3, 8, sg * 1.5, 0.3, -4.2), DARK);
+        s.guns.push(new THREE.Vector3(sg * 1.5, 0.3, -4.4));
+        s.engine(sg * 0.85, 0.05, 3.9, 0.26);
+      });
+      s.engine(0, 0.0, 3.95, 0.55);
+      s.nav(5.15, 0.36, -0.65);   // on the up-swept blade tips
+      [[0, -0.5, -2.8], [1.3, -0.45, 1.6], [-1.3, -0.45, 1.6]].forEach(([x, t, z]) => s.leg(x, t, z, 0.85));
+      return { paint: { primary: 0x1a1c22, secondary: 0x8a1a2a, accent: 0xff3ea5 }, length: 9.9, radius: 5.6 };
+    },
+
+    freighter(s) {   // ~72 m: bridge tower, truss spine, four rows of containers, engine block, running lights
+      const W = PR(1), P1 = PR(0.8);
+      s.h(loftHull([[-36, 3.0, 2.6, 0, 0.35], [-34, 4.2, 3.4, 0, 0.3], [-26, 4.4, 3.6, 0, 0.3]], (f) => (f < 0 || (f >= 3 && f <= 5) ? DARK : W)), null);
+      s.h(s.box(6, 3, 5, 0, 5, -30), W); s.h(s.box(7, 0.6, 5.6, 0, 6.8, -30), DARK);
+      s.g(s.box(6.1, 0.4, 0.1, 0, 5.6, -32.55), HDR(2.4, 2.0, 1.2));
+      s.h(s.box(3, 3, 58, 0, 0, 2), DARK);
+      for (let z = -24; z <= 30; z += 4) s.h(s.box(9.6, 0.4, 0.4, 0, 0, z), GREY);
+      const cols = [SE(1), AC(1), P1, SE(0.8), lin(0x6a3a22), AC(0.8), W];
+      let k = 0;
+      [[-4.2, -1.9], [4.2, -1.9], [-4.2, 1.9], [4.2, 1.9]].forEach(([x, y]) => { for (let i = 0; i < 6; i++) { const z = -21 + i * 8.2;
+        s.h(s.box(3.6, 3.6, 7.6, x, y, z), cols[(k * 3 + i * 5) % cols.length]); k++; } });
+      s.h(s.box(12, 8, 6, 0, 0, 33), W); s.h(s.box(12.4, 0.6, 6.4, 0, 4.1, 33), DARK);
+      [-1, 1].forEach((sg) => { for (let i = 0; i < 4; i++) s.h(s.box(0.2, 5.5, 4, sg * (6.3 + i * 0.5), 0, 33), GREY); });
+      [[-3, -2], [3, -2], [-3, 2], [3, 2]].forEach(([x, y]) => s.engine(x, y, 36, 1.6));
+      [-1, 1].forEach((sg) => { s.g(s.box(0.15, 0.15, 56, sg * 1.55, 1.55, 2), HDR(0.4, 1.6, 2.4)); s.g(s.box(0.6, 0.6, 0.6, sg * 6.2, 4.4, 33), HDR(4, 4, 4), 2); });
+      s.g(s.box(0.6, 0.6, 0.6, 0, 7.4, -30), HDR(4, 4, 4), 2);
+      s.nav(6.3, 0, 30);
+      return { paint: { primary: 0xb8b2a6, secondary: 0x2f6a8a, accent: 0xe0521c }, length: 72, radius: 38, noGear: true };
+    },
+
+    shuttle(s) {   // ~8 m civilian shuttle: rounded cabin, lit window band, stub wings, twin engines
+      const W = PR(1), P1 = PR(0.88), B = SE(1);
+      s.h(loftHull([[-4.0, 0.7, 0.6, 0.2, 0.5], [-3.3, 1.15, 1.0, 0.3, 0.45], [2.4, 1.2, 1.1, 0.3, 0.45], [3.6, 0.95, 0.85, 0.3, 0.5]],
+        (f, sg) => (f < 0 || (f >= 3 && f <= 5) ? DARK : (f === 2 || f === 6) ? (sg === 1 ? B : W) : f === 0 ? P1 : W)), null);
+      s.h(s.box(1.6, 0.4, 0.3, 0, 0.75, -3.75, 0.7, 0, 0), GLASS);
+      [-1, 1].forEach((sg) => { for (let i = 0; i < 5; i++) s.g(s.box(0.02, 0.28, 0.5, sg * 1.21, 0.62, -2.2 + i * 1.0), HDR(2.4, 1.9, 1.2)); });
+      [-1, 1].forEach((sg) => {
+        s.h(s.box(1.6, 0.18, 1.4, sg * 1.9, 0.0, 1.2), W); s.h(s.box(0.05, 0.05, 1.2, sg * 2.7, 0.1, 1.2), AC(1));
+        s.h(loftHull([[1.8, 0.32, 0.3, 0, 0.45], [3.4, 0.36, 0.34, 0, 0.45], [3.8, 0.3, 0.28, 0, 0.5]], (f) => (f < 0 ? DARK : P1)).translate(sg * 0.85, -0.65, 0), null);
+        s.engine(sg * 0.85, -0.65, 3.8, 0.26);
+      });
+      s.h(s.box(0.08, 1.0, 1.2, 0, 1.6, 3.0), B);
+      s.nav(2.7, 0, 1.6);
+      [[-1.1, -0.4, -2.4], [1.1, -0.4, -2.4], [-1.1, -0.4, 2.2], [1.1, -0.4, 2.2]].forEach(([x, t, z]) => s.leg(x, t, z, 0.8));
+      return { paint: { primary: 0xe8e4da, secondary: 0x2f6a8a, accent: 0xf0b429 }, length: 8.2, radius: 4.6 };
+    },
+
+    police(s) {    // ~14 m cruiser: wedge hull, blue flank stripes, red/blue light bar, chevrons
+      const W = PR(1), P1 = PR(0.9), B = SE(1), C2 = AC(1);
+      s.h(loftHull([[-7.0, 0.15, 0.1, 0, 0.3], [-5.5, 0.8, 0.4, 0, 0.3], [-2.0, 1.3, 0.7, 0.1, 0.3], [3.0, 1.4, 0.75, 0.1, 0.3], [6.5, 1.0, 0.6, 0, 0.35]],
+        (f, sg) => (f < 0 || (f >= 3 && f <= 5) ? DARK : (f === 2 || f === 6) ? B : f === 0 ? (sg % 2 ? W : P1) : W)), null);
+      s.h(loftHull([[-4.4, 0.3, 0.08, 0.5, 0.4], [-3.4, 0.6, 0.3, 0.62, 0.45], [-1.6, 0.66, 0.36, 0.7, 0.5], [-0.6, 0.5, 0.22, 0.7, 0.5]]), GLASS);
+      s.h(s.box(1.8, 0.14, 0.4, 0, 1.0, 0.4), DARK);
+      s.g(s.box(0.8, 0.16, 0.34, -0.45, 1.12, 0.4), HDR(1, 0.08, 0.08), 2); s.g(s.box(0.8, 0.16, 0.34, 0.45, 1.12, 0.4), HDR(0.1, 0.3, 1), 3);
+      [-1, 1].forEach((sg) => {
+        s.wing([[1.2, -0.4], [3.6, 1.6], [4.6, 3.4], [1.4, 3.6]], sg, 0.14, -0.15, 0.05, W, B, DARK);
+        for (let i = 0; i < 3; i++) s.h(s.box(0.6, 0.05, 0.14, sg * (2.2 + i * 0.55), 0.05, 2.0 + i * 0.4, 0, sg * 0.7, 0), C2);
+        s.g(s.box(0.06, 0.1, 0.5, sg * 1.42, 0.3, -4.6), sg < 0 ? HDR(1, 0.08, 0.08) : HDR(0.1, 0.3, 1), sg < 0 ? 2 : 3);
+        s.h(loftHull([[3.0, 0.42, 0.4, 0, 0.4], [6.4, 0.5, 0.48, 0, 0.4], [7.0, 0.44, 0.42, 0, 0.45]], (f) => (f < 0 || (f >= 3 && f <= 5) ? DARK : P1)).translate(sg * 1.3, -0.1, 0), null);
+        s.engine(sg * 1.3, -0.1, 7.0, 0.38);
+        s.h(s.cylZ(0.07, 0.07, 1.2, 8, sg * 2.0, -0.3, -3.6), GREY); s.guns.push(new THREE.Vector3(sg * 2.0, -0.3, -4.25));
+      });
+      s.nav(4.6, -0.15, 3.4);
+      [[0, -0.6, -4.0], [1.8, -0.45, 3.0], [-1.8, -0.45, 3.0]].forEach(([x, t, z]) => s.leg(x, t, z));
+      return { paint: { primary: 0xf4f6f8, secondary: 0x1f4fbf, accent: 0xd9e4ff }, length: 14.1, radius: 7.4 };
+    }
+  };
+  CLASSES.pirate = (s) => { const r = CLASSES.razor(s); r.paint = { primary: 0x5a3a2a, secondary: 0x1b1b1f, accent: 0xc0202a }; r.pirate = true; return r; };
+
+  /* scrap plates, nose spikes and mismatched panels for pirate builds */
+  function scrapUp(s, len, rnd) {
+    for (let i = 0; i < 14; i++) {
+      const z = (rnd() - 0.5) * len * 0.8, x = (rnd() - 0.5) * 2.4, y = 0.2 + rnd() * 0.6, w = 0.4 + rnd() * 0.9, d = 0.4 + rnd() * 1.2;
+      s.h(s.box(w, 0.06, d, x, y, z, (rnd() - 0.5) * 0.4, rnd() * 0.6, (rnd() - 0.5) * 0.4), [RUST, RUST2, BLACK, lin(0x5a5048)][i % 4]);
+    }
+    for (let i = 0; i < 3; i++) s.h(xf(new THREE.ConeGeometry(0.08, 0.9, 5), (i - 1) * 0.3, 0.1 + (i % 2) * 0.15, -len / 2 - 0.2, -Math.PI / 2, 0, 0), GREY);
+    s.h(s.box(0.6, 0.6, 0.04, 0, 0.3, -len / 2 + 2, 0.4, 0, 0), RUST);
+  }
+
+  /* ---------------------------------------------------------------- assembly */
+  function mergePaint(list) {
+    const g = mergeTinted(list), C = g.attributes.color, n = C.count, slot = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const r = C.getX(i), gg = C.getY(i), b = C.getZ(i), e = 1e-4;
+      let s = 0, sh = 0;
+      if (r > 0.01 && gg < e && Math.abs(r - b) < e) { s = 1; sh = r; }
+      else if (gg > 0.01 && r < e && Math.abs(gg - b) < e) { s = 2; sh = gg; }
+      else if (r > 0.01 && b < e && Math.abs(r - gg) < e) { s = 3; sh = r; }
+      if (s) { slot[i] = s; C.setXYZ(i, sh, sh, sh); }
+    }
+    g.setAttribute('aPaint', new THREE.BufferAttribute(slot, 1));
+    return g;
+  }
+  const toCol = (c) => (c && c.isColor ? c : lin(c));
+
+  VW.SHIP_CLASSES = ['vanta', 'mule', 'pathfinder', 'solaris', 'razor', 'freighter', 'shuttle', 'police', 'pirate'];
+  VW.buildShip = function buildShip(THREE_, cls, opts) {
+    opts = opts || {};
+    const build = CLASSES[cls]; if (!build) throw new Error('Unknown ship class ' + cls);
+    const s = Spec(), info = build(s), role = opts.role || (cls === 'pirate' ? 'pirate' : cls === 'police' ? 'police' : ['freighter', 'shuttle'].includes(cls) ? 'npc' : 'player');
+    if (role === 'pirate' || info.pirate) scrapUp(s, info.length, mulberry32(cls.length * 97 + 13));
+    const npc = role !== 'player';
+    // NPC ships fold the canopy into the hull mesh (one fewer draw call)
+    if (npc) s.glass.forEach((g) => s.h(g, GLASS));
+    // glow-list counts must be taken before merging (mergeTinted disposes the sources)
+    const glowCounts = s.G.map(([g]) => (g.index ? g.index.count : g.attributes.position.count));
+    const paint = Object.assign({}, info.paint, opts.paint || {});
+    const accMetal = { value: paint.accentMetal || 0 };
+    const hullMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.32, roughness: 0.42, envMap: opts.env || null, envMapIntensity: 1.0, flatShading: true });
+    hullMat.userData.paint = { p: toCol(paint.primary), s: toCol(paint.secondary), a: toCol(paint.accent), accMetal }; hullMat.onBeforeCompile = PAINT;
+    const glassMat = new THREE.MeshStandardMaterial({ color: GLASS, metalness: 0.9, roughness: 0.05, envMap: opts.env || null, envMapIntensity: 1.8, emissive: lin(0x07344e), emissiveIntensity: 0.7, flatShading: true });
+    const glowU = { nozzle: { value: new THREE.Color(0.5, 3.0, 4.2) }, flash: { value: new THREE.Vector3(0, 0, 0) } };
+    const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true }); glowMat.userData.glow = glowU; glowMat.onBeforeCompile = GLOW;
+    const plumeMat = plumeShader();
+
+    const root = new THREE.Group(); root.name = 'ship:' + cls;
+    const hull = new THREE.Mesh(mergePaint(s.H), hullMat); root.add(hull);
+    if (!npc && s.glass.length) root.add(new THREE.Mesh(mergeTinted(s.glass.map((g) => [g, 0xffffff])), glassMat));
+    const gk = new Float32Array(glowCounts.reduce((a, b) => a + b, 0)); let o = 0; s.G.forEach(([, , k], i) => { gk.fill(k || 0, o, o + glowCounts[i]); o += glowCounts[i]; });
+    const glowGeo = mergeTinted(s.G.map(([g, c]) => [g, c])); glowGeo.setAttribute('aGlow', new THREE.BufferAttribute(gk, 1));
+    const glow = new THREE.Mesh(glowGeo, glowMat); root.add(glow);
+    // all plumes in one mesh; aBase = (nozzle centre, plume length) so the shader stretches each from its own nozzle
+    const pl = s.engines.map((e) => { const L = 10 * e.r, c = new THREE.ConeGeometry(e.r, L, 16, 1, true); c.rotateX(Math.PI / 2); c.translate(e.x, e.y, e.z + L / 2);
+      const nb = c.attributes.position.count, base = new Float32Array(nb * 4); for (let i = 0; i < nb; i++) base.set([e.x, e.y, e.z, L], i * 4);
+      c.setAttribute('aBase', new THREE.BufferAttribute(base, 4)); return c; });
+    const plumeGeo = new THREE.BufferGeometry();
+    { const parts = pl.map((g) => g.toNonIndexed()); let n = 0; parts.forEach((g) => { n += g.attributes.position.count; });
+      ['position', 'normal', 'aBase'].forEach((name) => { const sz = parts[0].attributes[name].itemSize, arr = new Float32Array(n * sz); let off = 0; parts.forEach((g) => { arr.set(g.attributes[name].array, off); off += g.attributes[name].array.length; }); plumeGeo.setAttribute(name, new THREE.BufferAttribute(arr, sz)); });
+      parts.forEach((g) => g.dispose()); pl.forEach((g) => g.dispose()); plumeGeo.computeBoundingSphere(); plumeGeo.boundingSphere.radius += info.length; }
+    const plume = new THREE.Mesh(plumeGeo, plumeMat); plume.renderOrder = 12; plume.frustumCulled = false; root.add(plume);
+    const gear = new THREE.Group(); if (!info.noGear && s.gear.length) gear.add(new THREE.Mesh(mergeTinted(s.gear), hullMat)); gear.visible = false; root.add(gear);
+    root.traverse((m) => { if (m.isMesh && m !== plume) { m.castShadow = true; m.receiveShadow = true; if (m.renderOrder === 0) m.renderOrder = 10; } });
+
+    const police = cls === 'police' || role === 'police', freighter = cls === 'freighter';
+    return {
+      group: root, gear, plumes: [plume], plumeMat, nozzles: [glow], guns: s.guns, radius: info.radius, length: info.length, cls, role, landable: !info.noGear,
+      materials: [hullMat, glassMat, glowMat, plumeMat],
+      setThrust(v, boost, time) {
+        const u = plumeMat.uniforms; u.uThrust.value = v; u.uBoost.value = boost; u.uTime.value = time || 0;
+        u.uLen.value = 0.35 + v * 1.1 + boost * 1.4; u.uWide.value = 1 + boost * 0.25; plume.visible = v > 0.01;
+        glowU.nozzle.value.setRGB(0.5 + v * 1.5 + boost * 3, 3.0 + v * 3 + boost * 2, 4.2 + v * 3);
+        const t = time || 0;
+        if (police) { const a = Math.floor(t * 6) % 4; glowU.flash.value.set(a < 2 ? 5 : 0.15, a < 2 ? 0.15 : 5, 0); }   // red / blue alternate
+        else if (freighter) { const f = (t * 0.8) % 1 < 0.08 ? 4 : 0.2; glowU.flash.value.set(f, f, f); }
+        else glowU.flash.value.set(1, 1, 1);
+      },
+      setPaint(p) { const u = hullMat.userData.paint; if (p.primary !== undefined) u.p.copy(toCol(p.primary)); if (p.secondary !== undefined) u.s.copy(toCol(p.secondary));
+        if (p.accent !== undefined) u.a.copy(toCol(p.accent)); if (p.accentMetal !== undefined) accMetal.value = p.accentMetal; }
+    };
+  };
+})();
+
 /* =====================================================================
    GROUND — biome themes
    ===================================================================== */
@@ -4767,7 +5187,7 @@ function createGround(bodyId) {
   scene.add(motes);
 
   /* parked starship */
-  const shipModel = buildShipModel(env);
+  const shipModel = buildPlayerShip(env);
   const SHIP = new THREE.Vector3(7, 0, -12), SHIP_YAW = 2.4;
   // seat the ship on its three pads (VW-010): sample the ground under each pad, tilt to that plane,
   // and set the height from the pads' average so none float or sink on slopes
@@ -5123,7 +5543,7 @@ function createGround(bodyId) {
         i === 0 ? [7, 1.2, 1] : c, 0.08 + Math.random() * 0.08, 0.3 + Math.random() * 0.4);
     }
     if (node) {
-      node.hp -= 62 * dt;
+      node.hp -= 62 * (World.upg.focus ? 1.4 : 1) * dt;
       node.flash = 1;
       if (node.hp <= 0) killNode(node, tel);
     }
@@ -5264,11 +5684,45 @@ const GOODS = {
   neondust: { name: 'Neon Dust', src: 'the Noctis black market', base: 55, contraband: true },
   parcel: { name: 'Sealed parcel', src: 'a courier contract', base: 0, mission: true }
 };
-const CARGO_CAP = 24, DUST_BUY = 55, DUST_SELL = 170, FUEL_CR = 3;
+const DUST_BUY = 55, DUST_SELL = 170, FUEL_CR = 3, PAINT_CR = 200;
+/* player ship classes (Phobos ships.js). Multipliers scale thrust and top speed, pulse speed, fuel burn and mining. */
+const SHIPS = {
+  vanta: { name: 'Vanta', klass: 'Fighter', price: 0, cargo: 24, speed: 1, pulse: 1, burn: 1, mine: 1, desc: 'The nimble starter fighter.' },
+  mule: { name: 'Mule', klass: 'Hauler', price: 16000, cargo: 64, speed: 0.82, pulse: 0.9, burn: 1.15, mine: 1, desc: 'Slow and boxy, with a hold the size of a hangar.' },
+  pathfinder: { name: 'Pathfinder', klass: 'Explorer', price: 22000, cargo: 36, speed: 1.05, pulse: 1.2, burn: 0.6, mine: 1.15, desc: 'Long legs: a faster pulse on far less fuel.' },
+  razor: { name: 'Razor', klass: 'Interceptor', price: 30000, cargo: 16, speed: 1.3, pulse: 1.1, burn: 1.1, mine: 1.6, only: 'noctis', desc: 'Black-market interceptor with oversized cannons.' },
+  solaris: { name: 'Solaris', klass: 'Luxury yacht', price: 55000, cargo: 40, speed: 1.2, pulse: 1.3, burn: 0.8, mine: 1, only: 'aurelia', desc: 'White-gold yacht with the fastest pulse in Halcyon.' }
+};
+const PAINTS = [
+  { name: 'Factory finish', p: null },
+  { name: 'Ion', p: { primary: 0xe8eef6, secondary: 0x1b2a44, accent: 0x4ff2ff } },
+  { name: 'Ember', p: { primary: 0x2a1f1c, secondary: 0xd2502d, accent: 0xffb347 } },
+  { name: 'Royal', p: { primary: 0xf4efe6, secondary: 0xc9a14a, accent: 0xffd27a, accentMetal: 1 } },
+  { name: 'Neon Noir', p: { primary: 0x121318, secondary: 0x2a2140, accent: 0xff3ea5 } },
+  { name: 'Verdant', p: { primary: 0x24402e, secondary: 0xd8d2b8, accent: 0x9be15d } },
+  { name: 'Arctic', p: { primary: 0xf2f6fa, secondary: 0x8fa6bf, accent: 0x5ac8ff } },
+  { name: 'Hazard', p: { primary: 0xf2b134, secondary: 0x1d1e22, accent: 0xff4d5e } }
+];
+const UPGRADES = {
+  pods: { name: 'Cargo pods', desc: '+8 cargo on any hull', price: 2500, max: 2 },
+  recycler: { name: 'Fuel recycler', desc: '−25% fuel burn', price: 3500, max: 1 },
+  focus: { name: 'Beam focus', desc: '+40% mining speed, ship and multitool', price: 2000, max: 1 }
+};
+const shipStat = (k) => SHIPS[World.ship.cls][k];
+const cargoCap = () => shipStat('cargo') + World.upg.pods * 8;
+const burnMul = () => shipStat('burn') * (World.upg.recycler ? 0.75 : 1);
+const mineMul = () => shipStat('mine') * (World.upg.focus ? 1.4 : 1);
+const pulseTop = () => PULSE_SPEED * shipStat('pulse');
+function buildPlayerShip(env) {
+  const m = PHOBOS_VW.buildShip(THREE, World.ship.cls, { env, role: 'player', paint: (PAINTS[World.ship.paint] || PAINTS[0]).p || undefined });
+  m.gear.visible = true;
+  return m;
+}
+function dropModel(root) { root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose()); }); }
 const tradeable = (id) => GOODS[id] && !GOODS[id].contraband && !GOODS[id].mission;
 const cargoUsed = () => Object.values(World.cargo).reduce((a, n) => a + n, 0);
 function cargoAdd(id, n) {
-  const got = Math.max(0, Math.min(n, CARGO_CAP - cargoUsed()));
+  const got = Math.max(0, Math.min(n, cargoCap() - cargoUsed()));
   if (got) World.cargo[id] = (World.cargo[id] || 0) + got;
   return got;
 }
@@ -5336,8 +5790,8 @@ const VENDOR_INFO = {
   contracts: { name: 'Contract Board', line: { aurelia: 'Licensed work for licensed pilots.', noctis: 'Jobs. Some of them legal.' } },
   bar: { name: '', line: {} },
   blackmarket: { name: 'Black Market', line: { noctis: 'No questions, no receipts. Neon Dust, cheap. Don’t sell it here.' } },
-  shipwright: { name: 'Shipwright', line: { aurelia: 'New hulls arrive with the next shipment.', noctis: 'Yard’s closed for refit. Come back next update, pilot.' } },
-  outfitter: { name: 'Outfitter', line: { aurelia: 'Upgrades arrive with the next shipment.', noctis: 'Parts are on order. Next update.' } }
+  shipwright: { name: 'Shipwright', line: { aurelia: 'Every hull a masterpiece. The Solaris is ours alone.', noctis: 'No papers needed. The Razor’s only sold down here.' } },
+  outfitter: { name: 'Outfitter', line: { aurelia: 'Paint, pods and polish.', noctis: 'Fresh paint hides a lot. So do bigger pods.' } }
 };
 let vendorOpen = false, vendorKind = '', vendorCity = '', rumourIdx = 0;
 function openVendor(kind) {
@@ -5370,7 +5824,7 @@ function renderVendor() {
   $('vClass').textContent = BODY[city].name + ' · ' + (k === 'bar' ? 'Bar' : 'Kiosk');
   $('vName').textContent = k === 'bar' ? barName : info.name;
   $('vCredits').textContent = World.credits.toLocaleString() + ' CR';
-  $('vCargo').textContent = 'Cargo ' + cargoUsed() + '/' + CARGO_CAP + ' · Fuel ' + Math.floor(World.fuel) + '%';
+  $('vCargo').textContent = 'Cargo ' + cargoUsed() + '/' + cargoCap() + ' · Fuel ' + Math.floor(World.fuel) + '%';
   let line = info.line[city] || '', body = '';
   const row = (l, r) => '<div class="vrow"><div class="min-w-0">' + l + '</div><div class="flex gap-2 shrink-0 items-center">' + r + '</div></div>';
   if (k === 'broker') {
@@ -5392,7 +5846,7 @@ function renderVendor() {
       row('<b class="text-white">' + c.title + '</b><div class="text-[12px] text-slate-500">' + c.reward.toLocaleString() + ' CR</div>', btn('turnin:' + c.id, contractReady(c) ? 'Complete' : 'Not yet', contractReady(c), 'hot'))).join('');
     body += '<div class="lbl mt-4 mb-1">Offers · ' + World.contracts.length + '/3 active</div>' + boardFor(city).map((c) =>
       row('<b class="text-white">' + c.title + '</b><div class="text-[12px] text-slate-500">' + c.reward.toLocaleString() + ' CR' + (c.kind === 'courier' ? ' · takes 1 cargo slot' : '') + '</div>',
-        btn('take:' + c.id, 'Accept', World.contracts.length < 3 && (c.kind !== 'courier' || cargoUsed() < CARGO_CAP)))).join('');
+        btn('take:' + c.id, 'Accept', World.contracts.length < 3 && (c.kind !== 'courier' || cargoUsed() < cargoCap())))).join('');
   } else if (k === 'bar') {
     line = '“' + RUMOURS[city][rumourIdx % RUMOURS[city].length] + '”';
     body = row('Buy a round and listen', btn('rumour', 'Another rumour', true));
@@ -5403,8 +5857,26 @@ function renderVendor() {
   } else if (k === 'blackmarket') {
     const stock = Math.floor(World.dust);
     body = row('<b class="text-white">Neon Dust</b> <span class="text-slate-400">· ' + stock + ' in stock</span><div class="text-[12px] text-slate-500">' + DUST_BUY + ' CR each · no legal buyer anywhere</div>',
-      btn('dust:buy:1', 'Buy 1', stock >= 1 && World.credits >= DUST_BUY && cargoUsed() < CARGO_CAP) + btn('dust:buy:' + stock, 'Buy all', stock >= 1 && World.credits >= DUST_BUY * stock && cargoUsed() + stock <= CARGO_CAP, 'hot'));
-  } else body = '<div class="text-slate-400">Closed until the next update.</div>';
+      btn('dust:buy:1', 'Buy 1', stock >= 1 && World.credits >= DUST_BUY && cargoUsed() < cargoCap()) + btn('dust:buy:' + stock, 'Buy all', stock >= 1 && World.credits >= DUST_BUY * stock && cargoUsed() + stock <= cargoCap(), 'hot'));
+  } else if (k === 'shipwright') {
+    const cur = World.ship.cls, trade = Math.round(SHIPS[cur].price * 0.5);
+    const pct = (x) => (x === 1 ? '±0' : (x > 1 ? '+' : '−') + Math.round(Math.abs(x - 1) * 100)) + '%';
+    body = Object.keys(SHIPS).filter((c) => !SHIPS[c].only || SHIPS[c].only === city).map((c) => {
+      const S = SHIPS[c], cost = Math.max(0, S.price - trade), own = c === cur;
+      return row('<b class="text-white">' + S.name + '</b> <span class="text-slate-400">· ' + S.klass + '</span><div class="text-[12px] text-slate-500">' + S.desc + '</div>'
+        + '<div class="text-[12px] text-slate-400">Cargo ' + S.cargo + ' · speed ' + pct(S.speed) + ' · pulse ' + pct(S.pulse) + ' · fuel use ' + pct(S.burn) + ' · mining ' + pct(S.mine) + '</div>',
+        btn('preview:' + c, ground.previewCls === c ? 'On display' : 'Display', ground.previewCls !== c) + btn('buy:' + c, own ? 'Owned' : cost.toLocaleString() + ' CR', !own && World.credits >= cost, 'hot'));
+    }).join('') + '<div class="text-[12px] text-slate-500 mt-3">Prices include ' + trade.toLocaleString() + ' CR trade-in for your ' + SHIPS[cur].name + '.</div>';
+  } else if (k === 'outfitter') {
+    const sw = (h) => '<span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:#' + h.toString(16).padStart(6, '0') + '"></span>';
+    body = '<div class="lbl mb-1">Paint · ' + PAINT_CR + ' CR</div>' + PAINTS.map((pt, i) => row((pt.p ? sw(pt.p.primary) + sw(pt.p.secondary) + sw(pt.p.accent) : '') + '<b class="text-white ml-1">' + pt.name + '</b>',
+      btn('paint:' + i, i === World.ship.paint ? 'Applied' : 'Apply', i !== World.ship.paint && World.credits >= PAINT_CR))).join('')
+      + '<div class="lbl mt-5 mb-1">Upgrades</div>' + Object.keys(UPGRADES).map((u) => {
+        const U = UPGRADES[u], n = World.upg[u];
+        return row('<b class="text-white">' + U.name + '</b><div class="text-[12px] text-slate-500">' + U.desc + (U.max > 1 ? ' · ' + n + '/' + U.max + ' fitted' : '') + '</div>',
+          btn('upg:' + u, n >= U.max ? 'Fitted' : U.price.toLocaleString() + ' CR', n < U.max && World.credits >= U.price, 'hot'));
+      }).join('');
+  }
   $('vLine').textContent = line;
   $('vBody').innerHTML = body;
 }
@@ -5439,9 +5911,27 @@ $('vBody').addEventListener('click', (e) => {
     banner('Contract complete', c.title + ' · +' + c.reward.toLocaleString() + ' CR', BODY[city].name);
     Sound.complete();
   } else if (act === 'rumour') { rumourIdx++; Sound.ui(); }
+  else if (act === 'preview') { ground.previewShip(a1); Sound.ui(); }
+  else if (act === 'buy') {
+    const S = SHIPS[a1], cost = Math.max(0, S.price - Math.round(SHIPS[World.ship.cls].price * 0.5));
+    if (!S || World.credits < cost || (S.only && S.only !== city)) return;
+    if (cargoUsed() > S.cargo + World.upg.pods * 8) { toast('Sell cargo first · the ' + S.name + ' holds ' + (S.cargo + World.upg.pods * 8), 'warn'); Sound.deny(); return; }
+    World.credits -= cost; World.ship = { cls: a1, paint: 0 };
+    ground.rebuildShip();
+    banner('New ship · ' + S.name, S.klass + ' · cargo ' + cargoCap(), BODY[city].name + ' shipwright'); Sound.complete();
+  } else if (act === 'paint') {
+    if (World.credits < PAINT_CR) return;
+    World.credits -= PAINT_CR; World.ship.paint = +a1;
+    ground.rebuildShip(); toast('Paint applied · ' + PAINTS[+a1].name, 'good'); Sound.ui();
+  } else if (act === 'upg') {
+    const U = UPGRADES[a1];
+    if (!U || World.upg[a1] >= U.max || World.credits < U.price) return;
+    World.credits -= U.price; World.upg[a1]++;
+    toast(U.name + ' fitted', 'good'); Sound.complete();
+  }
   else if (act === 'dust') {
     if (a1 === 'buy') {
-      const n = Math.min(+a2 || 1, Math.floor(World.dust), Math.floor(World.credits / DUST_BUY), CARGO_CAP - cargoUsed());
+      const n = Math.min(+a2 || 1, Math.floor(World.dust), Math.floor(World.credits / DUST_BUY), cargoCap() - cargoUsed());
       if (n < 1) return;
       cargoAdd('neondust', n); World.dust -= n; World.credits -= n * DUST_BUY;
       toast('Bought ' + n + ' Neon Dust · −' + (n * DUST_BUY).toLocaleString() + ' CR', 'warn'); Sound.ui();
@@ -5546,10 +6036,27 @@ function createCity(bodyId) {
   for (const k in district.anchors.kiosks) vendorAt[k] = { at: district.anchors.kiosks[k].interact, r: (district.kit.kiosks[k].userData.radius || 2.4) + 1.9, label: district.anchors.kiosks[k].label };
 
   /* the ship sets down on the pad, nose to the plaza */
-  const shipModel = buildShipModel(env), SHIP = district.anchors.pad.clone();
+  let shipModel = buildPlayerShip(env);
+  const SHIP = district.anchors.pad.clone();
   shipModel.group.rotation.set(0, Math.PI, 0);
   shipModel.group.position.copy(SHIP).add(new THREE.Vector3(0, 40, 0));
   scene.add(shipModel.group);
+  // after buying or repainting: swap the parked hull in place
+  function rebuildShip() {
+    scene.remove(shipModel.group); dropModel(shipModel.group);
+    shipModel = buildPlayerShip(env);
+    shipModel.group.rotation.set(0, Math.PI, 0); shipModel.group.position.copy(SHIP);
+    shipModel.setThrust(0, 0, World.time);
+    scene.add(shipModel.group);
+  }
+  let preview = null, previewCls = '';
+  function previewShip(cls) {
+    if (preview) { scene.remove(preview.group); dropModel(preview.group); }
+    preview = PHOBOS_VW.buildShip(THREE, cls, { env, role: 'player' }); previewCls = cls;
+    preview.group.position.copy(district.anchors.displayPad); preview.setThrust(0, 0, 0);
+    scene.add(preview.group);
+  }
+  previewShip(noct ? 'razor' : 'solaris');
   const shipAnim = { mode: 'landing', t: 0, vy: 0 }, boardFrom = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
   const player = { pos: new THREE.Vector3(7, 0, -22), yaw: Math.PI - 0.25, pitch: -0.04, vel: new THREE.Vector3(), bob: 0 };
   const V3 = new THREE.Vector3(), V4 = new THREE.Vector3();
@@ -5592,6 +6099,7 @@ function createCity(bodyId) {
       w.p.yaw += Math.atan2(Math.sin(want - w.p.yaw), Math.cos(want - w.p.yaw)) * (1 - Math.exp(-6 * dt));
     }
     walkers.forEach((w, i) => crowd.userData.setNPC(i, w.p));
+    if (preview) preview.group.rotation.y += dt * 0.3;
     crowdMat.userData.uTime.value = t;
     district.update(t, dt);
     skyMat.uniforms.uTime.value = t;
@@ -5641,7 +6149,7 @@ function createCity(bodyId) {
   update(0, false);
   return {
     scene, camera, vmScene: null, vmCamera: null, update, dispose, startLaunch, scanTargets: () => [], decodeWaystone: () => null,
-    body, theme, player, isCity: true, district,
+    body, theme, player, isCity: true, district, rebuildShip, previewShip, get previewCls() { return previewCls; },
     get shipLanded() { return shipAnim.mode === 'parked'; },
     post: { threshold: A.threshold, bloom: A.bloom, exposure: A.exposure, aberr: 0.0006, vignette: 0.45, sat: 1.08 }
   };
@@ -5779,7 +6287,7 @@ function renderJournal() {
   const jobs = World.contracts.map((c) => '<div class="flex gap-3"><span class="mono text-cy">' + (contractReady(c) ? '✓' : '›') + '</span><span class="text-slate-300">' + c.title
     + ' <span class="text-am">' + c.reward.toLocaleString() + ' CR</span></span></div>').join('');
   html += '<div class="lbl mt-4 mb-1 text-cy">Contracts ' + World.contracts.length + '/3</div>' + (jobs || '<div class="text-slate-500">None. Find work at a city contract board.</div>')
-    + '<div class="lbl mt-4 mb-1 text-cy">Cargo ' + cargoUsed() + '/' + CARGO_CAP + '</div><div class="text-slate-400">' + (goods || 'Empty') + '</div>';
+    + '<div class="lbl mt-4 mb-1 text-cy">' + SHIPS[World.ship.cls].name + ' · cargo ' + cargoUsed() + '/' + cargoCap() + '</div><div class="text-slate-400">' + (goods || 'Empty') + '</div>';
   if (HUD.cache.get('journalList') !== html) { HUD.cache.set('journalList', html); $('journalList').innerHTML = html; }
   HUD.text('journalFoot', World.surveyDone ? 'Survey complete · thanks for playing' : World.glyphs.size + '/' + WILD.length + ' glyphs decoded · J to close');
 }
@@ -5799,7 +6307,7 @@ const MAP_BLURB = {
   kryo: 'The frozen moon of Okara Major.',
   crysalis: 'A prismatic anomaly of living glass at the edge of the system.'
 };
-const pulseEtaFor = (d) => d / PULSE_SPEED + 3;
+const pulseEtaFor = (d) => d / pulseTop() + 3;
 const NavMap = { cv: $('navCanvas'), ctx: null, w: 0, h: 0, zoom: 1, panX: 0, panY: 0, sel: null, hover: null, down: null, hits: [], listAt: 0,
   box: { x0: 0, y0: 0, x1: 0, y1: 0, cx: 0, cy: 0 } };
 NavMap.ctx = NavMap.cv.getContext('2d');
@@ -6306,8 +6814,8 @@ canvas.addEventListener('mousedown', () => { if (inPlay() && !Input.locked && !I
 function hudShared() {
   HUD.text('carbonVal', String(World.carbon));
   HUD.text('credVal', World.credits.toLocaleString() + ' CR');
-  HUD.text('cargoVal', cargoUsed() + '/' + CARGO_CAP);
-  HUD.cls('cargoVal', 'text-am', cargoUsed() >= CARGO_CAP);
+  HUD.text('cargoVal', cargoUsed() + '/' + cargoCap());
+  HUD.cls('cargoVal', 'text-am', cargoUsed() >= cargoCap());
   HUD.text('fuelVal', Math.ceil(World.fuel) + '%');
   HUD.bar('fuelBar', World.fuel / 100);
   HUD.cls('fuelBarWrap', 'hot', World.fuel < 20);
@@ -6320,14 +6828,14 @@ function hudSpace(tel) {
   const cam = space.camera;
   const pulsing = tel.pulse === 'on';
   HUD.text('spdVal', tel.speed >= 10000 ? (tel.speed / 1000).toFixed(1) + 'k' : String(Math.round(tel.speed)));
-  HUD.bar('spdBar', pulsing ? tel.speed / PULSE_SPEED : tel.speed / 780);
+  HUD.bar('spdBar', pulsing ? tel.speed / pulseTop() : tel.speed / (780 * shipStat('speed')));
   HUD.cls('spdBar', 'warm', tel.boostAmt > 0.3 || pulsing);
   const tp = tel.truePos;
   HUD.text('cX', (tp.x / 1000).toFixed(1) + 'k'); HUD.text('cY', (tp.y / 1000).toFixed(1) + 'k'); HUD.text('cZ', (tp.z / 1000).toFixed(1) + 'k');
   HUD.show('pulseBadge', tel.pulse !== 'off');
   if (tel.pulse !== 'off') HUD.text('pulseBadge', tel.pulse === 'spool' ? 'PULSE CHARGING · ' + Math.round(tel.pulseN * 100) + '%' : 'PULSE DRIVE ENGAGED');
   if (tel.pulseNote) toast(tel.pulseNote, 'info');
-  const nav = tel.nav || { b: tel.nearest, dist: tel.nearestSurf, pulseEta: tel.nearestSurf / PULSE_SPEED };
+  const nav = tel.nav || { b: tel.nearest, dist: tel.nearestSurf, pulseEta: tel.nearestSurf / pulseTop() };
   const tb = nav.b, dist = nav.dist;
   const tpos = space.bodyRenderPos(tb.id);
   HUD.show('pulseEta', pulsing);
@@ -6370,7 +6878,7 @@ function hudSpace(tel) {
 function cargoToast(tel) {
   const c = tel.cargoGain;
   if (!c) return;
-  if (c.n) toast('+' + c.n + ' ' + c.name + ' · cargo ' + cargoUsed() + '/' + CARGO_CAP, 'good');
+  if (c.n) toast('+' + c.n + ' ' + c.name + ' · cargo ' + cargoUsed() + '/' + cargoCap(), 'good');
   if (c.lost) toast('Cargo hold full · ' + c.lost + ' ' + c.name + ' lost', 'warn');
 }
 function hudGround(tel) {
