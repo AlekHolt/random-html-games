@@ -114,6 +114,7 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
 
 <!-- ============ HUD ============ -->
 <div id="hud" class="hud fixed inset-0 pointer-events-none z-20">
+  <div id="pulseEta" class="absolute left-1/2 top-[calc(50%+54px)] -translate-x-1/2 mono text-[12px] tracking-[.14em] text-cy s-only" style="display:none"></div>
 
   <!-- top-left: telemetry -->
   <div class="hud-tl absolute left-4 top-4 sm:left-6 sm:top-5 panel px-4 py-3 w-[230px] s-only">
@@ -309,18 +310,18 @@ body.mode-intro #hud, body.mode-intro #crosshair{display:none}
   <div class="absolute left-5 top-5 sm:left-7 sm:top-6 pointer-events-none">
     <div class="lbl tracking-[.5em]">System map</div>
     <div class="font-orb font-black text-[22px] sm:text-[28px] tracking-[.12em] text-white mt-2">HALCYON EXPANSE</div>
-    <div class="text-[13px] font-semibold tracking-[.08em] text-slate-400 mt-2 max-w-[min(620px,calc(100vw-370px))]">Click a world for details · double-click to set course · scroll to zoom · drag to pan · <span class="key">N</span> or <span class="key">Esc</span> to close</div>
+    <div class="text-[13px] font-semibold tracking-[.08em] text-slate-400 mt-2 max-w-[min(620px,calc(100vw-370px))] max-sm:hidden">Click a world for details · double-click to set course · scroll to zoom · drag to pan · <span class="key">N</span> or <span class="key">Esc</span> to close</div>
   </div>
-  <div id="navSide" class="absolute right-4 top-4 bottom-12 sm:right-6 sm:top-6 sm:bottom-14 w-[min(310px,calc(100vw-32px))] flex flex-col gap-3">
+  <div id="navSide" class="absolute right-4 top-4 bottom-12 sm:right-6 sm:top-6 sm:bottom-14 w-[min(310px,calc(100vw-32px))] flex flex-col gap-3 max-sm:top-auto max-sm:bottom-4 max-sm:max-h-[48vh]">
     <div id="navInfo" class="panel px-5 py-4 shrink-0" style="display:none">
       <div id="navInfoClass" class="lbl"></div>
       <div id="navInfoName" class="mono text-[20px] text-white mt-1"></div>
       <div id="navInfoBody" class="text-[13.5px] font-semibold leading-6 text-slate-300 mt-3"></div>
       <button id="navSetCourse" class="launch-btn mt-4 w-full" style="padding:11px 14px;font-size:11.5px">Set course</button>
     </div>
-    <div id="navList" class="panel px-3 py-3 min-h-0 flex-1 overflow-y-auto"></div>
+    <div id="navList" class="panel px-3 py-3 min-h-0 flex-1 overflow-y-auto max-sm:hidden"></div>
   </div>
-  <button id="navClose" class="absolute right-5 bottom-4 sm:right-7 sm:bottom-5 lbl text-slate-300 hover:text-white">Close map ✕</button>
+  <button id="navClose" class="absolute right-5 bottom-4 sm:right-7 sm:bottom-5 max-sm:top-5 max-sm:bottom-auto lbl text-slate-300 hover:text-white">Close map ✕</button>
 </section>
 
 <!-- city kiosk panel -->
@@ -1102,12 +1103,12 @@ function makePlanetMaterial(body) {
         emis = lc * lights * (0.45 + 1.55 * (1.0 - term));
       #else
         // Aurelia: ivory and pale-stone districts, gold roofs, park belts, skyways and turquoise reflecting lakes
-        col = mix(vec3(0.2, 0.2, 0.21), vec3(0.4, 0.37, 0.32), blocks);
-        col = mix(col, vec3(0.56, 0.4, 0.15), smoothstep(0.68, 0.84, snoise(n * 90.0 + uSeed) * 0.5 + 0.5) * 0.7);
+        col = mix(vec3(0.26, 0.23, 0.19), vec3(0.47, 0.41, 0.31), blocks);
+        col = mix(col, vec3(0.62, 0.45, 0.16), smoothstep(0.6, 0.8, snoise(n * 90.0 + uSeed) * 0.5 + 0.5) * 0.8);
         col *= 1.0 - (ave * 0.5 * near1 + st * 0.25 * near2) * (0.4 + 0.6 * dens);
         col = mix(col, vec3(0.06, 0.17, 0.06), smoothstep(0.6, 0.74, snoise(n * 11.0 + uSeed * 3.0) * 0.5 + 0.5) * 0.85);
         col = mix(col, vec3(0.55, 0.5, 0.4), hw * 0.6);
-        if (snoise(n * 4.0 + uSeed * 5.0) + snoise(n * 13.0 - uSeed) * 0.25 > 0.62) { col = vec3(0.03, 0.3, 0.38); sea = 1.0; N = S; lights *= 0.1; }
+        if (snoise(n * 4.0 + uSeed * 5.0) + snoise(n * 13.0 - uSeed) * 0.25 > 0.62) { col = vec3(0.04, 0.22, 0.26); sea = 1.0; N = S; lights *= 0.1; }
         gloss = sea > 0.5 ? 1.0 : 0.3;
         emis = vec3(1.6, 1.22, 0.66) * lights * (0.05 + 1.5 * (1.0 - term));
       #endif
@@ -1721,7 +1722,7 @@ const BODIES = [
     atmo: [0.18, 0.45, 1.05], atmoScale: 1.17, atmoDensity: 0.7, cloudCover: 0.6, cloudTint: [1.0, 1.0, 1.0], landable: true },
   { id: 'aurelia', name: 'Aurelia', klass: 'Core World · Capital', type: 'cityA', radius: 2300, orbit: 290000, period: 61000, phase: 0.95, incl: 0.01,
     tilt: 0.18, spin: 0.003, seed: 44.1, amp: 0.004, sea: -1, freq: 1.2, city: true,
-    atmo: [0.45, 0.6, 1.2], atmoScale: 1.12, atmoDensity: 0.5, cloudCover: 0.74, cloudTint: [1.0, 0.98, 0.94], landable: true },
+    atmo: [0.95, 0.72, 0.42], atmoScale: 1.12, atmoDensity: 0.5, cloudCover: 0.74, cloudTint: [1.0, 0.98, 0.94], landable: true },
   { id: 'thalassa', name: 'Thalassa', klass: 'Ocean World', type: 'ocean', radius: 2000, orbit: 380000, period: 70000, phase: 1.22, incl: -0.03,
     tilt: 0.3, spin: 0.006, seed: 57.2, amp: 0.045, sea: 0.32, freq: 1.4, res: 'coralite',
     atmo: [0.2, 0.55, 1.15], atmoScale: 1.16, atmoDensity: 0.7, cloudCover: 0.55, cloudTint: [1.0, 1.0, 1.0], landable: true },
@@ -2614,6 +2615,8 @@ function createSpace(opts) {
     if (mode !== 'flight') return '';
     if (pulse.state !== 'off') { dropPulse(null); return 'Pulse drive disengaged'; }
     if (World.fuel < 1) { Sound.deny(); return 'Not enough fuel for the pulse drive'; }
+    V.b.copy(origin).add(ship.pos);
+    if (V.b.length() > BOUNDARY_WARN - 20000 && V.fwd.set(0, 0, -1).applyQuaternion(ship.quat).dot(V.b) > 0) { Sound.deny(); return 'Heliopause ahead · turn inward to engage the pulse drive'; }
     const near = pulseBlocker();
     if (near) { Sound.deny(); return 'Too close to ' + near.name + ' to engage the pulse drive'; }
     pulse.state = 'spool'; pulse.t = 0;
@@ -4230,8 +4233,8 @@ vec3 npcRotX(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x, c
     root.add(neon, holo);
     // pad north of the plaza, kiosks round the south and sides, all facing the centre
     const anchors = { kiosks: {} };
-    kit.pad.position.set(0, 0, -36); root.add(kit.pad); anchors.pad = kit.pad.localToWorld(kit.pad.userData.shipAnchor.clone());
-    kit.displayPad.position.set(-34, 0, -30); root.add(kit.displayPad); anchors.displayPad = kit.displayPad.localToWorld(kit.displayPad.userData.shipAnchor.clone());
+    kit.pad.position.set(0, 0, -36); root.add(kit.pad); kit.pad.updateMatrixWorld(true); anchors.pad = kit.pad.localToWorld(kit.pad.userData.shipAnchor.clone());
+    kit.displayPad.position.set(-34, 0, -30); root.add(kit.displayPad); kit.displayPad.updateMatrixWorld(true); anchors.displayPad = kit.displayPad.localToWorld(kit.displayPad.userData.shipAnchor.clone());
     const spots = [['shipwright', -40, -10], ['broker', -40, 16], ['outfitter', 40, -10], ['contracts', 40, 16], ['bar', 0, 44], ['blackmarket', 24, 42]];
     spots.forEach(([k, x, z]) => { const g = kit.kiosks[k]; if (!g) return; g.position.set(x, 0, z); g.rotation.y = Math.atan2(-x, -z); root.add(g); g.updateMatrixWorld(true);
       anchors.kiosks[k] = { vendor: g.localToWorld(g.userData.vendorAnchor.clone()), interact: g.localToWorld(g.userData.interact.clone()), yaw: g.rotation.y + g.userData.vendorYaw, label: g.userData.label };
@@ -5543,9 +5546,7 @@ function createCity(bodyId) {
   for (const k in district.anchors.kiosks) vendorAt[k] = { at: district.anchors.kiosks[k].interact, r: (district.kit.kiosks[k].userData.radius || 2.4) + 1.9, label: district.anchors.kiosks[k].label };
 
   /* the ship sets down on the pad, nose to the plaza */
-  // the reference layout reads the pad anchor before the pad's matrix is updated, so take it from the pad itself
-  district.group.updateMatrixWorld(true);
-  const shipModel = buildShipModel(env), SHIP = district.kit.pad.localToWorld(district.kit.pad.userData.shipAnchor.clone());
+  const shipModel = buildShipModel(env), SHIP = district.anchors.pad.clone();
   shipModel.group.rotation.set(0, Math.PI, 0);
   shipModel.group.position.copy(SHIP).add(new THREE.Vector3(0, 40, 0));
   scene.add(shipModel.group);
@@ -5681,7 +5682,7 @@ function setPrompt(html) {
   HUD.show('prompt', true);
   if (HUD.cache.get('prompt') !== html) { HUD.cache.set('prompt', html); el.innerHTML = html; }
 }
-const proj = new THREE.Vector3();
+const proj = new THREE.Vector3(), pulseDir = new THREE.Vector3();
 function toScreen(world, camera) {
   proj.copy(world).applyMatrix4(camera.matrixWorldInverse);
   const behind = proj.z > -0.1;
@@ -5810,7 +5811,7 @@ function mapResize() {
   // the free area left of the info column (the whole width on narrow screens)
   const side = $('navSide').getBoundingClientRect(), wide = side.left > NavMap.w * 0.45;
   const B = NavMap.box;
-  B.x0 = 24; B.y0 = NavMap.w < 640 ? 120 : 100; B.x1 = wide ? side.left - 24 : NavMap.w - 24; B.y1 = NavMap.h - 40;
+  B.x0 = 24; B.y0 = NavMap.w < 640 ? 120 : 100; B.x1 = wide ? side.left - 24 : NavMap.w - 24; B.y1 = wide ? NavMap.h - 40 : Math.max(B.y0 + 120, side.top - 16);
   B.cx = (B.x0 + B.x1) / 2; B.cy = (B.y0 + B.y1) / 2;
 }
 function openMap() {
@@ -5909,6 +5910,9 @@ function drawMap() {
   const B = NavMap.box, pad = 60;
   const fit = Math.min((B.x1 - B.x0 - pad * 2) / Math.max(bx1 - bx0, 1), (B.y1 - B.y0 - pad * 2) / Math.max(bz1 - bz0, 1));
   const sc = fit * NavMap.zoom;
+  // keep part of the system on screen however far the view is dragged (VW-012)
+  const pmx = Math.max(0, (bx1 - bx0) / 2 * sc + (B.x1 - B.x0) / 2 - 80), pmy = Math.max(0, (bz1 - bz0) / 2 * sc + (B.y1 - B.y0) / 2 - 80);
+  NavMap.panX = clamp(NavMap.panX, -pmx, pmx); NavMap.panY = clamp(NavMap.panY, -pmy, pmy);
   const ox = B.cx + NavMap.panX - (bx0 + bx1) / 2 * sc, oy = B.cy + NavMap.panY - (bz0 + bz1) / 2 * sc;
   // range of sun-centred radii that can touch the viewport, to skip off-screen circles
   const nx = clamp(ox, 0, W) - ox, ny = clamp(oy, 0, H) - oy;
@@ -6066,7 +6070,7 @@ function drawMap() {
   }
 
   ctx.textAlign = 'center'; ctx.font = '600 10px Orbitron, monospace'; ctx.fillStyle = 'rgba(150,175,215,0.5)';
-  ctx.fillText('RING SPACING ' + (step / 1000) + 'K U  ·  ZOOM ' + NavMap.zoom.toFixed(1) + '×', B.cx, H - 16);
+  if (W >= 640) ctx.fillText('RING SPACING ' + (step / 1000) + 'K U  ·  ZOOM ' + NavMap.zoom.toFixed(1) + '×', B.cx, H - 16);
 
   if (performance.now() - NavMap.listAt > 250) { NavMap.listAt = performance.now(); renderMapPanels(d); }
 }
@@ -6326,6 +6330,11 @@ function hudSpace(tel) {
   const nav = tel.nav || { b: tel.nearest, dist: tel.nearestSurf, pulseEta: tel.nearestSurf / PULSE_SPEED };
   const tb = nav.b, dist = nav.dist;
   const tpos = space.bodyRenderPos(tb.id);
+  HUD.show('pulseEta', pulsing);
+  if (pulsing) {
+    const closing = space.ship.vel.dot(pulseDir.subVectors(tpos, cam.position).normalize());
+    HUD.text('pulseEta', 'PULSE · ' + tb.name.toUpperCase() + ' · ' + (closing > 50 ? fmtEta(dist / closing) : 'OFF COURSE'));
+  }
   HUD.text('tgtName', tb.name); HUD.text('tgtClass', tb.klass); HUD.text('tgtDist', fmtDist(dist));
   HUD.text('tgtSys', pulsing ? 'Arriving in ' + fmtEta(dist / Math.max(tel.speed, 1))
     : dist > 30000 ? 'Pulse ETA ' + fmtEta(nav.pulseEta) + ' · Q align · Space pulse'
