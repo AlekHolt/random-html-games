@@ -3071,19 +3071,19 @@ function createSpace(opts) {
       m.gear.visible = false; scene.add(m.group);
       const pos = ship.pos.clone().addScaledVector(V.fwd, 1700).add(CB.a.set(Math.random() - 0.5, (Math.random() - 0.5) * 0.4, Math.random() - 0.5).normalize().multiplyScalar(500 + k * 260));
       const q = new THREE.Quaternion().setFromRotationMatrix(CB.mm.lookAt(pos, ship.pos, CB.up));
-      pirates.push({ m, pos, q, vel: new THREE.Vector3(), hp: 70, r: Math.max(8, m.radius * 1.3), fire: 1 + Math.random(), mode: 'attack', t: 0, brk: new THREE.Vector3(), far: 0, speed: 290 + Math.random() * 40 });
+      pirates.push({ m, pos, q, vel: new THREE.Vector3(), hp: 120, jink: Math.random() * TAU, r: Math.max(8, m.radius * 1.3), fire: 1 + Math.random(), mode: 'attack', t: 0, brk: new THREE.Vector3(), far: 0, speed: 290 + Math.random() * 40 });
     }
   }
   function killPirate(p, tel) {
     p.hp = 0;
     boom(p.pos, 1.4, [6, 1.8, 0.5]); Sound.shatter();
     scene.remove(p.m.group); dropModel(p.m.group);
-    const bounty = 200 + Math.floor(Math.random() * 4) * 25;
+    const bounty = 120 + Math.floor(Math.random() * 3) * 30;
     World.credits += bounty; World.stats.earned += bounty; World.stats.pirates++;
     tel.bounty = bounty;
     const pod = PHOBOS_VW.buildLootPod(THREE, env);
     pod.position.copy(p.pos); scene.add(pod);
-    pods.push({ g: pod, life: 60, loot: Math.random() < 0.4 ? ['aurium', 1 + Math.floor(Math.random() * 2)] : ['ferrite', 3 + Math.floor(Math.random() * 3)], cr: 60 + Math.floor(Math.random() * 120) });
+    pods.push({ g: pod, life: 60, loot: Math.random() < 0.25 ? ['aurium', 1] : ['ferrite', 2 + Math.floor(Math.random() * 3)], cr: 40 + Math.floor(Math.random() * 60) });
   }
   function combat(dt, ctrl, tel) {
     // player cannons (hold RMB): alternate muzzles, converge on the reticle 1,000 u out
@@ -3094,7 +3094,7 @@ function createSpace(opts) {
       const g = shipModel.guns[gunSide++ % shipModel.guns.length], from = CB.b.copy(g).applyMatrix4(shipModel.group.matrixWorld);
       CB.d.set(0, 0, -1).applyQuaternion(camera.quaternion);
       // aim assist: a pirate within ~6° of the reticle gets a lead shot at its intercept point
-      let best = null, bestA = 0.1;
+      let best = null, bestA = 0.045;   // ~2.6° (VW-023)
       for (const p of pirates) {
         if (p.hp <= 0) continue;
         const ang = CB.d.angleTo(CB.a.subVectors(p.pos, camera.position));
@@ -3108,7 +3108,7 @@ function createSpace(opts) {
     // pirate raids: deep space only, twice as often in the lawless Noctis approaches, never near Aurelia's patrols
     const aur = bodyById.aurelia, noc = bodyById.noctis;
     const aurD = ship.pos.distanceTo(aur.pos) - aur.b.radius, nocZone = ship.pos.distanceTo(noc.pos) < 90000;
-    if (mode === 'flight' && !pirates.length && aurD > 45000 && nearestBody().surf > 6000) raidClock += dt * (nocZone ? 2 : 1);
+    if (mode === 'flight' && !pirates.length && aurD > 45000 && nearestBody().surf > 6000) raidClock += dt * (nocZone ? 1.5 : 1);
     if (raidClock > nextRaid) {
       raidClock = 0; nextRaid = 150 + Math.random() * 110;
       spawnRaid(nocZone ? 3 : 2);
@@ -3124,6 +3124,8 @@ function createSpace(opts) {
       if (p.mode === 'attack' && dist < 240) { p.mode = 'break'; p.t = 2 + Math.random() * 1.5; p.brk.copy(to).negate().normalize().add(CB.b.set(Math.random() - 0.5, (Math.random() - 0.5) * 0.6, Math.random() - 0.5)).normalize(); }
       if (p.mode === 'break' && p.t <= 0) p.mode = 'attack';
       const target = p.mode === 'attack' ? CB.b.copy(ship.pos).addScaledVector(ship.vel, dist / 1500) : CB.b.copy(p.pos).addScaledVector(p.brk, 500);
+      // weave on the attack run so they're not a straight-line target (VW-023)
+      if (p.mode === 'attack' && dist > 400) target.add(CB.d.set(Math.sin(World.time * 1.9 + p.jink), Math.cos(World.time * 1.3 + p.jink) * 0.6, Math.cos(World.time * 1.7 + p.jink)).multiplyScalar(Math.min(160, dist * 0.12)));
       CB.qq.setFromRotationMatrix(CB.mm.lookAt(p.pos, target, CB.up));
       p.q.slerp(CB.qq, 1 - Math.exp(-1.7 * dt));
       const fwd = CB.d.set(0, 0, -1).applyQuaternion(p.q);
@@ -3137,8 +3139,8 @@ function createSpace(opts) {
         // lead the player (bolts leave at 1500 u/s), with a little scatter
         const from = CB.b.copy(p.pos).addScaledVector(fwd, 7);
         const aim = CB.a.copy(ship.pos).addScaledVector(ship.vel, dist / 1500).sub(from).normalize();
-        aim.x += (Math.random() - 0.5) * 0.024; aim.y += (Math.random() - 0.5) * 0.024; aim.z += (Math.random() - 0.5) * 0.024;
-        fireBolt(from, aim.normalize(), 1500, CB.zero, true, 4);
+        aim.x += (Math.random() - 0.5) * 0.016; aim.y += (Math.random() - 0.5) * 0.016; aim.z += (Math.random() - 0.5) * 0.016;
+        fireBolt(from, aim.normalize(), 1500, CB.zero, true, 5);
         Sound.tone(300 + Math.random() * 40, 0.08, { type: 'sawtooth', vol: 0.02 });
       }
       // outrun them and they give up
@@ -3149,6 +3151,7 @@ function createSpace(opts) {
     const hitMe = Math.max(6, shipModel.radius) ** 2;
     for (let i = bolts.length - 1; i >= 0; i--) {
       const b = bolts[i];
+      if (!b) break;   // VW-022: destroyed() empties the list during this loop
       b.prev.copy(b.p); b.p.addScaledVector(b.v, dt); b.life -= dt;
       let hit = false;
       if (b.enemy) { if (segD2(b.prev, b.p, ship.pos) < hitMe) { damagePlayer(b.dmg, tel); hit = true; } }
@@ -3159,6 +3162,7 @@ function createSpace(opts) {
       }
       if (hit) for (let k = 0; k < 8; k++) sparks.emit(b.p.x, b.p.y, b.p.z, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, b.enemy ? [6, 1, 0.4] : [1, 4, 6], 1.2, 0.35);
       if (hit || b.life <= 0) bolts.splice(i, 1);
+      if (tel.destroyed !== undefined) break;
     }
     bolts.forEach((b, i) => {
       CB.q.setFromUnitVectors(CB.z, CB.a.copy(b.v).normalize());
@@ -3185,7 +3189,7 @@ function createSpace(opts) {
     // Aurelia customs: a scan on approach; 60% chance to find Neon Dust
     if (aurD < 22000 && !customs.done && (World.cargo.neondust || 0) > 0) { customs.done = true; customs.t = 2.5; tel.customsScan = true; }
     if (customs.t > 0 && (customs.t -= dt) <= 0) {
-      if (Math.random() < 0.6) { const n = cargoTake('neondust', 999), fine = n * 60; World.credits = Math.max(0, World.credits - fine); tel.customs = { n, fine }; }
+      if (Math.random() < 0.35) { const n = cargoTake('neondust', 999), fine = n * 50; World.credits = Math.max(0, World.credits - fine); tel.customs = { n, fine }; }
       else tel.customs = { n: 0 };
     }
     if (aurD > 60000) customs.done = false;
@@ -6074,10 +6078,10 @@ function renderVendor() {
     const cur = World.ship.cls, trade = Math.round(SHIPS[cur].price * 0.5);
     const pct = (x) => (x === 1 ? '±0' : (x > 1 ? '+' : '−') + Math.round(Math.abs(x - 1) * 100)) + '%';
     body = Object.keys(SHIPS).filter((c) => !SHIPS[c].only || SHIPS[c].only === city).map((c) => {
-      const S = SHIPS[c], cost = Math.max(0, S.price - trade), own = c === cur;
+      const S = SHIPS[c], cost = S.price - trade, own = c === cur;
       return row('<b class="text-white">' + S.name + '</b> <span class="text-slate-400">· ' + S.klass + '</span><div class="text-[12px] text-slate-500">' + S.desc + '</div>'
         + '<div class="text-[12px] text-slate-400">Cargo ' + S.cargo + ' · speed ' + pct(S.speed) + ' · pulse ' + pct(S.pulse) + ' · fuel use ' + pct(S.burn) + ' · mining ' + pct(S.mine) + '</div>',
-        btn('preview:' + c, ground.previewCls === c ? 'On display' : 'Display', ground.previewCls !== c) + btn('buy:' + c, own ? 'Owned' : cost.toLocaleString() + ' CR', !own && World.credits >= cost, 'hot'));
+        btn('preview:' + c, ground.previewCls === c ? 'On display' : 'Display', ground.previewCls !== c) + btn('buy:' + c, own ? 'Owned' : cost >= 0 ? cost.toLocaleString() + ' CR' : 'Trade · +' + (-cost).toLocaleString() + ' CR', !own && World.credits >= cost, 'hot'));
     }).join('') + '<div class="text-[12px] text-slate-500 mt-3">Prices include ' + trade.toLocaleString() + ' CR trade-in for your ' + SHIPS[cur].name + '.</div>';
   } else if (k === 'outfitter') {
     const sw = (h) => '<span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:#' + h.toString(16).padStart(6, '0') + '"></span>';
@@ -6131,7 +6135,7 @@ $('vBody').addEventListener('click', (e) => {
   } else if (act === 'rumour') { rumourIdx++; Sound.ui(); }
   else if (act === 'preview') { ground.previewShip(a1); Sound.ui(); }
   else if (act === 'buy') {
-    const S = SHIPS[a1], cost = Math.max(0, S.price - Math.round(SHIPS[World.ship.cls].price * 0.5));
+    const S = SHIPS[a1], cost = S && S.price - Math.round(SHIPS[World.ship.cls].price * 0.5);   // negative = refund (VW-024)
     if (!S || World.credits < cost || (S.only && S.only !== city)) return;
     if (cargoUsed() > S.cargo + World.upg.pods * 8) { toast('Sell cargo first · the ' + S.name + ' holds ' + (S.cargo + World.upg.pods * 8), 'warn'); Sound.deny(); return; }
     World.credits -= cost; World.ship = { cls: a1, paint: 0 }; World.hull = shipStat('hull');

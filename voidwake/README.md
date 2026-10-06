@@ -145,17 +145,17 @@ You start with 300 credits (CR) and a 24-unit cargo hold.
 
 ### Pirates and the law
 
-- **Raids.** Pirates raid in deep space every few minutes of flight. They come twice as often near
+- **Raids.** Pirates raid in deep space every few minutes of flight. They come more often near
   Noctis and never inside Aurelia's patrol zone. A raid interdicts the pulse drive and jams it until the
   pirates are dead or you outrun them (9,000 u for 6 s).
 - **Damage.** Shields (50) recharge after 4 s without a hit. The hull is set by your ship class, and
   docking at a city repairs it.
-- **Rewards.** A kill pays a 200–275 CR bounty and drops a salvage pod. Fly through the pod for credits
+- **Rewards.** A kill pays a 120–180 CR bounty and drops a salvage pod. Fly through the pod for credits
   and ferrite or aurium. Contract boards also post bounty jobs.
 - **Losing your ship.** Insurance rebuilds it near the last world you visited for 10% of your credits.
   Your cargo and any courier parcel are lost.
-- **Customs.** Aurelia scans ships on approach. If you carry Neon Dust, there's a 60% chance it's seized,
-  with a 60 CR fine per unit.
+- **Customs.** Aurelia scans ships on approach. If you carry Neon Dust, there's a 35% chance it's seized,
+  with a 50 CR fine per unit.
 - **Saves.** Credits, cargo, contracts, hull, your ship, its paint and upgrades are saved with the
   voyage, as are the black market's stock, market saturation and the contract boards.
 
