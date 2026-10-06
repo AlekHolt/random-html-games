@@ -2570,6 +2570,7 @@ function createSpace(opts) {
     for (const o of bodies) {
       if (ship.pos.distanceTo(o.pos) - o.b.radius < o.b.radius * 1.2 + 600) return o.b;
     }
+    if (V.b.copy(origin).add(ship.pos).length() - SUN_RADIUS < SUN_RADIUS * 1.2 + 600) return { name: 'the sun' };
     return null;
   }
   // returns a message for the HUD, or '' when nothing needs saying
@@ -2687,6 +2688,12 @@ function createSpace(opts) {
           V.c.subVectors(o.pos, ship.pos);
           const surf = V.c.length() - o.b.radius, along = V.c.dot(V.fwd), hitR = o.b.radius * 1.6 + 1500;
           if (surf < o.b.radius * 2 + 2500 && along > 0 && V.c.lengthSq() - along * along < hitR * hitR) { dropPulse('Arriving at ' + o.b.name); break; }
+        }
+        // the sun (at the true-space origin) gets the same rule with a wider zone, so a course through it drops out
+        if (pulse.state === 'on') {
+          V.c.copy(origin).add(ship.pos).negate();
+          const sd = V.c.length(), along = V.c.dot(V.fwd), hitR = SUN_RADIUS * 1.6 + 3000;
+          if (sd - SUN_RADIUS < SUN_RADIUS * 2 + 6000 && along > 0 && sd * sd - along * along < hitR * hitR) dropPulse('Solar proximity · pulse drive disengaged');
         }
         if (pulse.state === 'on' && trueR > BOUNDARY_WARN - 20000 && V.b.copy(origin).add(ship.pos).dot(V.fwd) > 0) dropPulse('Approaching the outer boundary');
       }
