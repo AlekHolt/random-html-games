@@ -7,7 +7,7 @@ date: 2026-10-25
 ---
 
 ## What changed
-New game, **Nullpoint** (`nullpoint/index.html`): a textless cyberpunk desert explorer. There's a 500 × 500 m monolith
+New game, **Nullpoint** (`nullpoint/index.html`, branch `claude/cyberpunk-wasteland-game-f62b82` @ 98bff83): a textless cyberpunk desert explorer. There's a 500 × 500 m monolith
 (two ring floors of 50 m bays, an atrium, an upper cathedral hall) plus five outposts. Detail chunks stream in and out
 with distance, so there are no loading screens. Click the cyan glyph to start. Test hooks are at `window.__np`
 (`step(dt,n)`, `tp(x,y,z)`, `state()`).
