@@ -915,10 +915,10 @@ const AU=(()=>{let C=null,M,rainG,rainF,rainLP,droneG,musG,humG,noise,seqI=0,nex
   const CH=[[45,[69,72,76,81]],[41,[65,69,72,77]],[48,[64,67,72,76]],[43,[62,67,71,74]]],ARP=[0,1,2,3,2,1,0,2,1,2,3,2,0,3,1,2],BAS=[1,0,0,1,0,0,1,0,1,0,1,1,0,0,1,0];
   function sched(){if(!C||musG.gain.value<.002&&!SANCT.on){nextT=C?C.currentTime+.05:0;return}const sp=60/112/4;
     while(nextT<C.currentTime+.12){const t=nextT,s=step16%16,bar=Math.floor(step16/16)%4,[root,ch]=CH[bar];
-      if(s%4===0){tone('sine',150,42,.5,.28,musG,t,.002);A.beatT=t}if(s%2===1)burst('highpass',8000,.7,.05,.035,musG,t);if(s===4||s===12)burst('bandpass',1800,.8,.18,.14,musG,t);
-      if(BAS[s]){const o=tone('sawtooth',mf(root+(s%8===6?12:0)),null,.13,sp*1.6,musG,t,.004)}
-      const ar=tone('square',mf(ch[ARP[s]]+(bar===3&&s>11?12:0)),null,.035,sp*.9,musG,t,.003);
-      if(s===0)for(const n of ch.slice(0,3)){tone('sawtooth',mf(n-12)*1.003,null,.025,sp*15,musG,t,.4);tone('sawtooth',mf(n-12)*.997,null,.025,sp*15,musG,t,.4)}
+      if(s%4===0){tone('sine',150,42,.5,.28,musG,t-C.currentTime,.002);A.beatT=t}if(s%2===1)burst('highpass',8000,.7,.05,.035,musG,t);if(s===4||s===12)burst('bandpass',1800,.8,.18,.14,musG,t);
+      if(BAS[s]){const o=tone('sawtooth',mf(root+(s%8===6?12:0)),null,.13,sp*1.6,musG,t-C.currentTime,.004)}
+      const ar=tone('square',mf(ch[ARP[s]]+(bar===3&&s>11?12:0)),null,.035,sp*.9,musG,t-C.currentTime,.003);
+      if(s===0)for(const n of ch.slice(0,3)){tone('sawtooth',mf(n-12)*1.003,null,.025,sp*15,musG,t-C.currentTime,.4);tone('sawtooth',mf(n-12)*.997,null,.025,sp*15,musG,t-C.currentTime,.4)}
       nextT+=sp;step16++}}
   A.step=(ind,dash)=>{if(!C)return;if(ind){burst('bandpass',2400+Math.random()*700,7,.16,.05);tone('square',1700,800,.012,.03)}else{burst('bandpass',700+Math.random()*500,1.1,.2,.13);burst('highpass',4500,1,.05,.09)}if(dash)burst('lowpass',400,1,.08,.1)};
   A.whoosh=()=>{if(!C)return;const t=C.currentTime,f=burst('highpass',300,2,.35,.4);f.frequency.setValueAtTime(300,t);f.frequency.exponentialRampToValueAtTime(7000,t+.32);tone('sawtooth',160,1500,.04,.28)};
@@ -944,3 +944,59 @@ const AU=(()=>{let C=null,M,rainG,rainF,rainLP,droneG,musG,humG,noise,seqI=0,nex
     if(!S.won){rainG.gain.setTargetAtTime(mus?.004:P.inside?.22:.32,t,.6);droneG.gain.setTargetAtTime(mus?.002:.12,t,.6)}musG.gain.setTargetAtTime(mus?.55:0,t,mus?.4:.8);
     humG.gain.setTargetAtTime(hum,t,.15);U.beat.value=Math.exp(-Math.max(0,t-A.beatT)*7)*(t>=A.beatT?1:0)};
   return A})();
+
+// ---------- 14 progression ----------
+const TG={warm:0,pulse:0,fog:.006,over:0};let wonT=-1;
+const HEMI0=[new THREE.Color(0x223055),new THREE.Color(0x0a0608)],HEMI1=[new THREE.Color(0x4a3a40),new THREE.Color(0x1a0e08)];
+function coreActivated(){S.coresOn=S.cores.reduce((a,b)=>a+b,0);const n=S.coresOn;
+  if(n>=1)TG.warm=1;if(n>=2){TG.pulse=1;TG.fog=.0075}
+  if(n>=3&&!S.won){S.won=true;wonT=0;TG.over=1;AU.victory();
+    setTimeout(()=>{document.getElementById('fade').style.opacity=1},3000);setTimeout(()=>{document.getElementById('end').style.opacity=1;document.exitPointerLock&&document.exitPointerLock()},5600)}}
+
+// ---------- 15 loop ----------
+const BLINK=[];PERM.g.traverse(o=>{if(o.userData.blink)BLINK.push(o)});
+let thunderT=9,flashQ=[],streamT=0,shake=0;
+function step(dt){U.time.value+=dt;const t=U.time.value;
+  if(started&&!(S.won&&wonT>3))physics(dt);else{P.vel.set(0,0,0);P.dash=false}
+  animRig(P.R,dt,t,{dash:P.dash&&P.ground,air:!P.ground&&!P.vent});camUpdate(dt);
+  if(shake>0){shake=Math.max(0,shake-dt);camera.position.x+=(Math.random()-.5)*shake*.3;camera.position.y+=(Math.random()-.5)*shake*.3}
+  streamT-=dt;if(streamT<=0){streamT=.2;streamUpdate(P.pos)}streamWork(started?3.5:1e4);
+  for(const f of UPS)f(dt);npcUpdate(dt,t);lightUpdate(P.pos,dt);focusUpdate(dt);
+  P.R.root.updateMatrixWorld(true);trailUpdate(dt);
+  // weather: lightning flash + delayed thunder
+  thunderT-=dt;if(thunderT<=0&&!S.won){thunderT=12+Math.random()*26;const d=.4+Math.random()*1.8;flashQ=[[0,.9],[.08,.1],[.16,1],[.3,.2],[.45,.6]];setTimeout(()=>AU.thunder(1-d/2.5),d*1000);flashQ.t0=t}
+  let fl=0;if(flashQ.length){const e=t-flashQ.t0;for(const[a,v]of flashQ)if(e>a)fl=v;if(e>.7)flashQ=[];fl*=Math.max(0,1-e/.8)}
+  if(S.won){wonT+=dt;fl=Math.random()<.35?1:Math.random()*.4;shake=Math.min(1,wonT*.4)}
+  U.flash.value=damp(U.flash.value,fl,30,dt);
+  U.warm.value=damp(U.warm.value,TG.warm,.6,dt);U.pulse.value=damp(U.pulse.value,TG.pulse,.5,dt);U.over.value=damp(U.over.value,TG.over,S.won?2.5:1,dt);
+  scene.fog.density=damp(scene.fog.density,TG.fog,.4,dt);U.fogD.value=scene.fog.density;U.hue.value=damp(U.hue.value,HUE.t,2,dt);
+  hemi.color.copy(HEMI0[0]).lerp(HEMI1[0],U.warm.value*.7);hemi.groundColor.copy(HEMI0[1]).lerp(HEMI1[1],U.warm.value*.7);hemi.intensity=.55+U.flash.value*1.6+U.over.value*.5;
+  amb.color.setHex(0x101522).lerp(_c.setHex(0x2a1608),U.over.value*.8);moon.intensity=.55+U.flash.value*2.5;
+  for(const s of POOL)if(U.over.value>.01)s.l.color.lerp(_c.setHex(PAL.org),U.over.value);
+  if(CABLE_MAT.uniforms.uSurge.value>=0){CABLE_MAT.uniforms.uSurge.value+=dt*90;if(CABLE_MAT.uniforms.uSurge.value>450)CABLE_MAT.uniforms.uSurge.value=-1}
+  // shadow camera follows the player, snapped to texels to stop shimmering
+  const sn=140/2048;moon.target.position.set(Math.round(P.pos.x/sn)*sn,0,Math.round(P.pos.z/sn)*sn);moon.position.copy(moon.target.position).add(_v.set(-60,120,40));
+  U.cam.value.copy(camera.position);sky.position.copy(camera.position);
+  // occlusion: the monolith's interior shell only draws when the player is near or inside it
+  const mi=window.__monoInterior;if(mi)mi.visible=P.pos.x>-300&&P.pos.x<300&&P.pos.z>-620&&P.pos.z<-20;
+  for(const b of BLINK)b.visible=Math.sin(t*2.2+b.position.x)>.2;
+  SANCT.on=damp(SANCT.on,Math.hypot(P.pos.x-SANCT.x,P.pos.z-SANCT.z)<1.5&&P.pos.y<1?1:0,3,dt);
+  let hum=0;if(FOCUS)hum=.5*clamp(1-FOCUS.p.distanceTo(P.chest)/FOCUS.r,0,1);AU.update(dt,S.won?0:hum)}
+const clock=new THREE.Clock();
+function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);step(dt);renderer.render(scene,camera)}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+// textless start gate (browsers need a gesture for audio + pointer lock)
+const gate=document.getElementById('gate'),keys=document.getElementById('keys');
+gate.addEventListener('click',()=>{AU.init();if(!started){started=true;keys.classList.add('on');setTimeout(()=>keys.classList.remove('on'),5000)}
+  gate.classList.add('off');try{const r=renderer.domElement.requestPointerLock();if(r&&r.catch)r.catch(()=>{})}catch(e){}});
+document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;if(!locked&&started&&!S.won)gate.classList.remove('off')});
+renderer.domElement.addEventListener('mousemove',e=>{if(!locked&&started&&e.buttons&1){P.yaw-=e.movementX*.004;P.pitch=clamp(P.pitch-e.movementY*.004,-1.35,1.35)}});
+spawnNPCs();streamUpdate(P.pos);streamWork(1e4);step(1/60);renderer.compile(scene,camera);frame();
+// test hooks for Helios
+window.__np={step:(dt=1/60,n=1)=>{for(let i=0;i<n;i++)step(dt);renderer.render(scene,camera)},tp:(x,y,z)=>{P.pos.set(x,y,z);P.vel.set(0,0,0);streamUpdate(P.pos);streamWork(1e4)},
+  key:(c,d=true)=>{K[c]=d},press:c=>{if(c==='KeyE')interact();if(c==='KeyV')P.fp=!P.fp},start:()=>{started=true},look:(y,p=0)=>{P.yaw=y;P.pitch=p},P,S,
+  state:()=>({pos:P.pos.toArray().map(v=>+v.toFixed(2)),ground:P.ground,up:P.up,cores:S.cores.slice(),won:S.won,built:ST.built,queue:ST.queue.length,ints:INTS.size,
+    npcs:NPCS.filter(n=>n.in).length,npcTotal:NPCS.length,focus:!!FOCUS,calls:renderer.info.render.calls,tris:renderer.info.render.triangles})};
+</script>
+</body>
+</html>
