@@ -75,4 +75,23 @@ export const GAMES: Game[] = [
       accent: '#ffb347', accent2: '#8f7bff', glow: 'rgba(143, 123, 255, 0.22)',
     },
   },
+  {
+    id: 'nullpoint',
+    title: 'Nullpoint',
+    kicker: 'Textless neo-noir explorer',
+    tagline: 'No words, no tutorial. A neon monolith in the rain, and three cores to wake.',
+    description:
+      'Explore a streamed 500 m monolith and its desert outposts with nothing but the keys you are shown for five seconds. Dash through light projections, float up anti-gravity vents and hunt for secrets among wet-asphalt reflections, shader rain, articulated cyborg NPCs and a synthesised soundtrack.',
+    tags: ['WebGL', 'three.js', 'Procedural', 'Textless'],
+    facts: [['Controls', 'WASD · Mouse · Shift · E'], ['Words', 'None'], ['Size', 'One HTML file']],
+    href: 'nullpoint/',
+    readme: 'https://github.com/AlekHolt/random-html-games/tree/main/nullpoint',
+    shots: [
+      { src: 'nullpoint/screenshots/monolith.jpg', alt: 'A cybernetic figure dashing past a rain-soaked neon monolith' },
+    ],
+    theme: {
+      bg: '#03070b', surface: '#0a141c', fg: '#e2f6ff', muted: '#7fa3b4',
+      accent: '#4ff2ff', accent2: '#ff3ea5', glow: 'rgba(79, 242, 255, 0.18)',
+    },
+  },
 ]

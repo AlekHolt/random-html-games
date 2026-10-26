@@ -231,7 +231,12 @@ body { font-family: 'Rajdhani', system-ui, -apple-system, 'Segoe UI', sans-serif
 @keyframes vw-drift { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-6%, 4%) scale(1.08); } }
 .vw-nebula { animation: vw-drift 18s ease-in-out infinite; }
 
+@keyframes np-rain { from { transform: translate(0, -20vh) rotate(12deg); } to { transform: translate(-18vh, 110vh) rotate(12deg); } }
+.np-rain { animation: np-rain linear infinite; }
+@keyframes np-core { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.np-core { animation: np-core 2.4s ease-in-out infinite; filter: drop-shadow(0 0 6px #ff3ea5); }
+
 @media (prefers-reduced-motion: reduce) {
-  .nr-trail, .vw-bands, .vw-nebula, .animate-bounce { animation: none !important; }
+  .nr-trail, .vw-bands, .vw-nebula, .np-rain, .np-core, .animate-bounce { animation: none !important; }
   :root { transition: none; }
 }

@@ -5,8 +5,9 @@ import { Intro } from '@/components/Intro'
 import { GameSection } from '@/components/GameSection'
 import { NeonRunScene } from '@/components/scenes/NeonRunScene'
 import { VoidwakeScene } from '@/components/scenes/VoidwakeScene'
+import { NullpointScene } from '@/components/scenes/NullpointScene'
 
-const SCENES: Record<string, ReactNode> = { 'neon-run': <NeonRunScene />, voidwake: <VoidwakeScene /> }
+const SCENES: Record<string, ReactNode> = { 'neon-run': <NeonRunScene />, voidwake: <VoidwakeScene />, nullpoint: <NullpointScene /> }
 
 /* Push a theme into the page's CSS variables; @property in index.css makes them animate between games. */
 function applyTheme(t: Theme) {
