@@ -595,7 +595,6 @@ for(let q=0;q<4;q++){const qx=q%2,qz=q>>1,x0=qx?0:-100,z0=qz?MZ:MZ-100;
     for(let k=0;k<2;k++){const mx=x0+25+k*45,mz=z0+30+k*35;b.box(mx,2.5,mz,7,5,5,0x232833);b.box(mx,5.3,mz,6,.6,4,0x2c3342);cx.solid(null,mx-3.5,0,mz-2.5,mx+3.5,5.6,mz+2.5);
       for(let c=0;c<3;c++){const t=new THREE.Mesh(new THREE.TorusGeometry(1,.1,6,20),neon(k?PAL.mag:PAL.cyan));t.position.set(mx-2+c*2,7,mz);cx.add(t);b.cyl(mx-2+c*2,6.3,mz,.5,1.6,0x50586a)}
       cx.light(mx,8,mz,k?PAL.mag:PAL.cyan,2,24);terminal(cx,mx,0,mz+4.2,0,k?PAL.mag:PAL.cyan,r)}
-    for(let s=0;s<6;s++)tube(nb,gl,x0+(qx?0:100)*0+s*0,0,0,0,0,0,0,0,0);
     const sq=[20,45,70];for(const d of sq){const a=qx?d:-d,c=qz?d:-d;tube(nb,gl,0,.04,MZ+c,a,.04,MZ+c,.05,PAL.cyan,.4);tube(nb,gl,a,.04,MZ,a,.04,MZ+c,.05,PAL.cyan,.4)}
     if(q===0){vent(cx,-94.5,0,-345,18,'aW',1);vent(cx,-75,0,-414.5,18,'aN',1)}
     if(q===1)vent(cx,75,0,-414.5,35,'aR',1);
@@ -629,3 +628,117 @@ for(let s=0;s<4;s++)for(let n=0;n<10;n++){const ax=s<2?'x':'z',k=[-570,-70,-250,
       sg.rotation.y=ax==='x'?(o>0?0:Math.PI):o*Math.PI/2;cx.add(sg);cx.light(px,sg.position.y,pz+(ax==='x'?o*2:0),sm.uniforms.uCol.value.getHex(),1.2,14)}
     const lc=r()<.5?PAL.cyan:PAL.org,[lx,,lz]=P2(c0+25,3.5,0);cx.light(lx,6,lz,lc,1.6,22);const[ax2,,az2]=P2(c0+20,1.9,0),[bx2,,bz2]=P2(c0+30,1.9,0);tube(nb,gl,ax2,6.5,az2,bx2,6.5,bz2,.06,lc,.8);
     cx.mesh(b,M.prop);cx.mesh(nb,M.neonV,false);cx.glow(gl)},110,1200+s*10+n)}
+
+// ---------- 10 outposts, secrets, exterior ----------
+const EB=new Batch(),EN=new Batch(),EG=new Glow(),EW=new Batch();
+// box building with door gaps; returns interior rect. doors: [[side 'n'|'s'|'w'|'e', offset from centre, width, height]]
+function building(cx0,cz0,w,d,h,doors,col=0x20252f,o={}){const x0=cx0-w/2,x1=cx0+w/2,z0=cz0-d/2,z1=cz0+d/2,fy=o.fy||0,t=.6;
+  const g=s=>doors.filter(q=>q[0]===s).map(q=>[(s==='n'||s==='s'?cx0:cz0)+q[1],q[2]||3.4,(q[3]||4)+fy]);
+  wall(EB,'x',x0,x1,z0,0,h,t,g('n'),col);wall(EB,'x',x0,x1,z1,0,h,t,g('s'),col);wall(EB,'z',z0+t/2,z1-t/2,x0,0,h,t,g('w'),col);wall(EB,'z',z0+t/2,z1-t/2,x1,0,h,t,g('e'),col);
+  solid(EB,x0-.4,h,z0-.4,x1+.4,h+.5,z1+.4,0x1b1f28);solid(EB,x0,-.1,z0,x1,.04,z1,0x15181f);
+  for(const[s,a,b2]of[[z0-.4,x0,x1],[z1+.4,x0,x1]])tube(EN,EG,a-.4,h+.25,s+(s<cz0?-.05:.05),b2+.4,h+.25,s+(s<cz0?-.05:.05),.06,o.trim??PAL.cyan,.6);
+  for(const[s,a,b2]of[[x0-.4,z0,z1],[x1+.4,z0,z1]])tube(EN,EG,s+(s<cx0?-.05:.05),h+.25,a-.4,s+(s<cx0?-.05:.05),h+.25,b2+.4,.06,o.trim??PAL.cyan,.6);
+  for(let k=x0+3;k<x1-2;k+=4.5){if(doors.some(q=>(q[0]==='s'||q[0]==='n')&&Math.abs(cx0+q[1]-k-1)<3))continue;EW.quad(k+1,h*.62,z1+.32,2.2,1.2,0x7fd8ff,0);EW.quad(k+1,h*.62,z0-.32,2.2,1.2,PAL.amb,Math.PI)}
+  for(const c of[[x0,z0],[x1,z0],[x0,z1],[x1,z1]])EB.bb(c[0]-.5,0,c[1]-.5,c[0]+.5,h+.6,c[1]+.5,0x2c3342);
+  RAINR.push([x0-.4,z0-.4,x1+.4,z1+.4,h+.6]);return{x0,x1,z0,z1,h}}
+// spawn plaza
+{const r=rng(3);EB.cyl(0,.01,0,1.6,.04,0x1b1f27);for(let k=0;k<6;k++){const a=k/6*TAU;EN.box(Math.cos(a)*1.4,.04,Math.sin(a)*1.4,.6,.02,.06,PAL.cyan,-a+Math.PI/2)}
+  for(let k=0;k<14;k++){const a=k/14*TAU+.1,R=40+r()*6;if(Math.abs(Math.sin(a))>.92||Math.abs(a-4.9)<.25)continue;EB.box(Math.cos(a)*R,.5,Math.sin(a)*R,2.2,1,.6,0x2a303c,-a);EN.box(Math.cos(a)*R,1.02,Math.sin(a)*R,2,.04,.62,k%3?PAL.org:PAL.cyan,-a);
+    addBox(Math.cos(a)*R-1.1,0,Math.sin(a)*R-1.1,Math.cos(a)*R+1.1,1,Math.sin(a)*R+1.1)}
+  chunk(-50,-50,50,50,0,20,cx=>{pylon(cx,16,0,-10,PAL.cyan,()=>{HUE.t+=TAU/3});vent(cx,-56,0,24,10,'relayV',1,1.4)},90,7)}
+const HUE={t:0};
+// O1 relay station
+{const[cx0,cz0]=OUT.relay,B=building(cx0,cz0,20,14,7,[['e',0,3.4,4]]);EB.cyl(cx0-5,7.5+4,cz0,.3,8,0x3a4252);EB.cyl(cx0+4,8.2,cz0-3,2.4,.3,0x2a303c,.6);EB.cyl(cx0+4,7.6,cz0-3,.3,1.2,0x3a4252);
+  PERM.light(cx0-5,15.6,cz0,PAL.red,1,10);const bl=glowSprite(PAL.red,1.6,.9,true);bl.position.set(cx0-5,15.6,cz0);bl.userData.blink=1;PERM.add(bl);
+  chunk(B.x0,B.z0,B.x1,B.z1,0,8,(cx,r)=>{door(cx,B.x1,0,cz0,3.4,4,'z','relayD');consoleWall(cx,cx0,0,B.z0+.6,0,10,3.4,PAL.cyan,r);terminal(cx,cx0-5,0,cz0+2,0,PAL.cyan,r);terminal(cx,cx0+2,0,cz0+2,0,PAL.amb,r,{mode:2});
+    rack(cx,B.x0+1,0,cz0+4,Math.PI/2,PAL.cyan,r);rack(cx,B.x0+1,0,cz0+2.6,Math.PI/2,PAL.mag,r);cx.light(cx0,5.5,cz0,PAL.cyan,1.6,16)},50,11);
+  NSP.push({k:'citizen',b:'scan',path:[[cx0-5,0,cz0+3.4]],look:[cx0-5,cz0+2]})}
+// O2 server shack: raised floor over a crawlspace; hidden terminal flips gravity in the room
+{const[cx0,cz0]=OUT.shack,FY=2.2,B=building(cx0,cz0,18,14,8,[['w',0,3,3.6]],0x20252f,{fy:FY,trim:PAL.mag});
+  slab(EB,B.x0+.3,B.z0+.3,B.x1-.3,B.z1-.3,FY-.2,FY,[B.x1-3.2,B.z1-3.2,B.x1-1.6,B.z1-1.6],0x262c38);
+  for(let k=0;k<4;k++)solid(EB,B.x0-2.4+k*.6,0,cz0-1.6,B.x0-1.8+k*.6+(k===3?1.5:0),.55*(k+1),cz0+1.6,0x2a303c);
+  solid(EB,B.x0+.3,0,cz0-1.6,B.x0+1.2,FY,cz0+1.6,0x2a303c);
+  FLIPZ.add({x0:B.x0+.3,x1:B.x1-.3,z0:B.z0+.3,z1:B.z1-.3,y0:FY,y1:8});
+  chunk(B.x0,B.z0,B.x1,B.z1,0,9,(cx,r)=>{door(cx,B.x0,FY,cz0,3,3.6,'z','shackD',{col:PAL.mag});
+    for(let k=0;k<5;k++)rack(cx,B.x0+3+k*1.15,FY,B.z0+1.2,0,k%2?PAL.mag:PAL.cyan,r);for(let k=0;k<5;k++)rack(cx,B.x0+3+k*1.15,FY,B.z1-1.2,Math.PI,PAL.cyan,r);
+    terminal(cx,cx0+4,FY,cz0,Math.PI/2,PAL.mag,r);const b=new Batch(),nb=new Batch();
+    for(let x=B.x0+1;x<B.x1;x+=1.2)for(let z=B.z0+1;z<B.z1;z+=1.2)nb.box(x,FY+.005,z,.04,.01,.6,0x24384a);
+    for(let k=0;k<12;k++)b.cyl(B.x0+1.5+k*1.3,1,B.z0+1.5+(k%3)*4,.08,2,0x50586a);crate(b,B.x1-2.4,0,B.z1-2.4,1.1,r);cx.solid(null,B.x1-2.95,0,B.z1-2.95,B.x1-1.85,1.1,B.z1-1.85);
+    for(let k=0;k<6;k++)b.cyl(cx0,1.4,B.z0+2+k*1.8,.15,16,0x2a3140,0,Math.PI/2);
+    terminal(cx,B.x0+2.2,0,B.z0+2,Math.PI/2,0x2f6f7f,r,{fn:()=>{S.flip=!S.flip;AU.flip()}});
+    const ct=terminal(cx,cx0-2,8,cz0+3,0,PAL.mag,r,{noE:true});ct.g.rotation.z=Math.PI;ct.g.updateMatrixWorld();
+    cx.int({p:V3(cx0-2,6.8,cz0+3),r:2.6,fn:()=>{S.flip=!S.flip;AU.flip()}});cx.light(cx0,6,cz0,PAL.mag,1.5,14);cx.light(cx0,1,cz0,0x2f6f7f,.7,10);
+    cx.mesh(b,M.prop);cx.mesh(nb,M.neonV,false)},50,12);
+  NSP.push({k:'worker',b:'patrol',path:[[cx0-4,FY,cz0],[cx0+5,FY,cz0]]})}
+// O3 reactor outpost: core A
+{const[cx0,cz0]=OUT.reactor,B=building(cx0,cz0,30,24,10,[['w',0,4,4.5],['s',-6,4,4.5]],0x22262f,{trim:PAL.org});
+  for(let k=0;k<3;k++){EB.cyl(B.x1+3,4,cz0-8+k*8,2.2,8,0x2a3140);addBox(B.x1+.8,0,cz0-10.2+k*8,B.x1+5.2,8,cz0-5.8+k*8);EN.cyl(B.x1+3,8.1,cz0-8+k*8,1.8,.1,PAL.org)}
+  chunk(B.x0,B.z0,B.x1,B.z1,0,11,(cx,r)=>{door(cx,B.x0,0,cz0,4,4.5,'z','reacW',{col:PAL.org});door(cx,cx0-6,0,B.z1,4,4.5,'x','reacS',{col:PAL.org});core(cx,cx0,0,cz0,0);
+    for(let k=0;k<4;k++){const a=k/4*TAU+.78;rod(cx,cx0+Math.cos(a)*8,10,cz0+Math.sin(a)*8,4.5,PAL.org,r)}consoleWall(cx,cx0,0,B.z0+.6,0,14,4.5,PAL.org,r);
+    terminal(cx,B.x1-3,0,cz0+6,-Math.PI/2,PAL.org,r);terminal(cx,B.x1-3,0,cz0-6,-Math.PI/2,PAL.amb,r,{mode:1});const nb=new Batch();for(let k=0;k<16;k++){const a=k/16*TAU;nb.box(cx0+Math.cos(a)*5,.03,cz0+Math.sin(a)*5,1,.02,.3,PAL.org,-a)}cx.mesh(nb,M.neonV,false)},55,13);
+  NSP.push({k:'drone',b:'patrol',path:[[OUT.reactor[0]-20,5,OUT.reactor[1]-16],[OUT.reactor[0]+20,7,OUT.reactor[1]-16],[OUT.reactor[0]+20,5,OUT.reactor[1]+16],[OUT.reactor[0]-20,8,OUT.reactor[1]+16]]})}
+// O4 twin blocks, the alley and (behind an unstable light projection) the sanctuary
+const SANCT={x:-305,z:-146,on:0};
+const ILL_MAT=new THREE.ShaderMaterial({uniforms:{uTime:U.time,fogC:U.fogC,fogD:U.fogD},vertexShader:`varying vec3 vW;varying float vD;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vec4 mv=viewMatrix*w;vD=-mv.z;gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`uniform float uTime,fogD;uniform vec3 fogC;varying vec3 vW;varying float vD;${GLN}void main(){float sl=floor(vW.y*14.);float jit=step(.985,h21(vec2(sl,floor(uTime*9.))))*.12;
+  vec2 q=vec2(vW.x+jit,vW.y)/4.;vec2 g=abs(fract(q)-.5);float seam=step(.48,max(g.x,g.y));vec3 c=vec3(.12,.135,.165)*(.8+.35*h21(floor(q)))*(1.-seam*.6);
+  c*=.93+.07*sin(vW.y*90.+uTime*12.);c+=vec3(.05,.2,.25)*step(.995,h21(vec2(sl,floor(uTime*3.))))*.6;gl_FragColor=vec4(c,1.);
+  #include <tonemapping_fragment>
+  gl_FragColor.rgb=mix(gl_FragColor.rgb,fogC,1.-exp(-fogD*fogD*vD*vD));}`});
+{const A=building(-320,-118,26,36,9,[['w',0,3,3.8]],0x1e222b,{trim:PAL.mag}),Bb=building(-290,-118,26,36,12,[['e',0,3,3.8]],0x1e222b,{trim:PAL.cyan});
+  wall(EB,'x',-333,-277,-160,0,9,.6,[],0x1b1f27);wall(EB,'z',-160,-136,-333,0,9,.6,[],0x1b1f27);wall(EB,'z',-160,-136,-277,0,9,.6,[],0x1b1f27);solid(EB,-333.4,9,-160.4,-276.6,9.5,-136,0x1b1f28);RAINR.push([-333.4,-160.4,-276.6,-136,9.6]);
+  wall(EB,'z',-156,-136,-315,0,9,.6,[],0x06070a);wall(EB,'z',-156,-136,-295,0,9,.6,[],0x06070a);wall(EB,'x',-315,-295,-156,0,9,.6,[],0x06070a);solid(EB,-315,8.4,-156,-295,9,-136.3,0x06070a);
+  addBox(-307,0,-136.4,-303,9,-135.8,{ill:true});const iw=new THREE.Mesh(TPL.box,ILL_MAT);iw.position.set(-305,4.5,-136.1);iw.scale.set(4,9,.6);PERM.add(iw);
+  for(let z=-134;z<-102;z+=4){EB.cyl(-306.6,6+((z/4)%2)*1.2,z,.18,4,0x353d4c,Math.PI/2);EB.box(-303.4,3+Math.abs(z%3),z,.5,1.2,1.4,0x2a303c)}
+  EB.box(-305,.7,-110,2.4,1.4,1.2,0x2a3a2a);addBox(-306.2,0,-110.6,-303.8,1.4,-109.4);
+  chunk(-333,-160,-277,-100,0,13,(cx,r)=>{door(cx,A.x0,0,-118,3,3.8,'z','alleyA',{col:PAL.mag});door(cx,Bb.x1,0,-118,3,3.8,'z','alleyB');
+    const sm=screenMat(PAL.mag,0,4.4),sg=mk(TPL.quad,sm,-306.68,6,-120,3,1.6,1);sg.rotation.y=Math.PI/2;cx.add(sg);cx.light(-305,6,-120,PAL.mag,1.2,10);cx.up(()=>{sm.uniforms.uAct.value=Math.random()<.04?2:.2});
+    terminal(cx,A.x0+3,0,-108,Math.PI/2,PAL.mag,r);consoleWall(cx,-320,0,-135.4,0,10,3.2,PAL.mag,r);for(let k=0;k<6;k++)rack(cx,A.x1-1.2,0,-130+k*1.15,-Math.PI/2,PAL.mag,r);
+    const b=new Batch(),nb=new Batch(),gl=new Glow();for(let k=0;k<4;k++){const bz2=-130+k*7;for(const yy of[.5,2.1]){b.box(-280,yy,bz2,2.2,.3,4.4,0x2a303c);b.box(-280,yy+.3,bz2,2,.25,4.2,0x2f2a3a)}cx.solid(null,-281.1,0,bz2-2.2,-278.9,3,bz2+2.2)}
+    terminal(cx,-296,0,-112,Math.PI,PAL.cyan,r);cx.light(-290,8,-118,PAL.cyan,1.4,18);cx.light(-320,6,-118,PAL.mag,1.4,18);
+    // sanctuary: pitch black, a hex node in the middle; beat-reactive lines appear only while the melody plays
+    const hx=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.4,.12,6),M.dark);hx.position.set(SANCT.x,.06,SANCT.z);cx.add(hx);const nm=neonMat({col:PAL.cyan,int:.25});nm.userData.own=true;
+    const hr=new THREE.Mesh(new THREE.TorusGeometry(1.45,.03,4,6),nm);hr.rotation.x=Math.PI/2;hr.rotation.z=Math.PI/6;hr.position.set(SANCT.x,.13,SANCT.z);cx.add(hr);
+    const lm=neonMat({col:PAL.cyan,int:0});lm.userData.own=true;const lb=new Batch();for(let k=0;k<5;k++){lb.box(-314.6,1+k*1.7,-146,.02,.04,19,0xffffff);lb.box(-295.4,1+k*1.7,-146,.02,.04,19,0xffffff);lb.box(-305,1+k*1.7,-155.6,19,.04,.02,0xffffff)}
+    for(let k=1;k<5;k++){const t=new THREE.Mesh(new THREE.TorusGeometry(1.45+k*1.6,.025,4,6),lm);t.rotation.x=Math.PI/2;t.rotation.z=Math.PI/6;t.position.set(SANCT.x,.05,SANCT.z);cx.add(t)}
+    const lmesh=lb.mesh(lm,false);cx.add(lmesh);const ln=cx.light(SANCT.x,3,SANCT.z,PAL.cyan,0,14);
+    cx.up(dt=>{const on=SANCT.on;nm.uniforms.uInt.value=.25+on*1.5+Math.sin(U.time.value*1.7)*.12;lm.uniforms.uInt.value=on*(.25+U.beat.value*1.6);ln.i=on*(.6+U.beat.value*1.4);hr.rotation.z=Math.PI/6+U.time.value*on*.5});
+    cx.mesh(b,M.prop);cx.mesh(nb,M.neonV,false);cx.glow(gl)},45,14);
+  NSP.push({k:'drone',b:'patrol',path:[[-305,4,-104],[-305,4,-132]]},{k:'citizen',b:'watch',path:[[-322,0,-112]]})}
+// O5 worker dormitory
+{const[cx0,cz0]=OUT.dorm,B=building(cx0,cz0,28,16,8,[['n',-6,3,3.8],['n',6,3,3.8]],0x20252f,{trim:PAL.amb});for(const k of[-8,0,8]){EB.cyl(cx0+k,10,cz0+3,1.6,3.6,0x2a3140);EB.cyl(cx0+k,8.5,cz0+3,.2,1,0x50586a)}
+  chunk(B.x0,B.z0,B.x1,B.z1,0,9,(cx,r)=>{door(cx,cx0-6,0,B.z0,3,3.8,'x','dormA',{col:PAL.amb});door(cx,cx0+6,0,B.z0,3,3.8,'x','dormB',{col:PAL.amb});
+    const b=new Batch(),nb=new Batch();for(let k=0;k<6;k++){const x=B.x0+3+k*4.4;for(const yy of[.5,2.1]){b.box(x,yy,B.z1-3,2,.3,4.2,0x2a303c);b.box(x,yy+.3,B.z1-3,1.8,.25,4,0x3a2f3a)}nb.box(x,3.1,B.z1-5.1,1.6,.04,.04,PAL.amb);cx.solid(null,x-1,0,B.z1-5.1,x+1,3,B.z1-.9)}
+    b.box(cx0,.9,cz0-2,6,.12,2,0x2a303c);cx.solid(null,cx0-3,0,cz0-3,cx0+3,1,cz0-1);terminal(cx,B.x0+1.5,0,cz0-3,Math.PI/2,PAL.amb,r);cx.light(cx0-6,6,cz0,PAL.amb,1.4,16);cx.light(cx0+6,6,cz0,PAL.amb,1.4,16);
+    cx.mesh(b,M.prop);cx.mesh(nb,M.neonV,false)},50,15);
+  NSP.push({k:'citizen',b:'watch',path:[[cx0-4,0,cz0+1]]},{k:'worker',b:'patrol',path:[[cx0-10,0,cz0-4],[cx0+10,0,cz0-4]]},{k:'citizen',b:'patrol',path:[[cx0,0,cz0-14],[0,0,40],[-20,0,10]]})}
+// roads: light poles + exterior wanderers
+{const r=rng(21);for(const[ax,az,bx2,bz2]of ROADS){const L=Math.hypot(bx2-ax,bz2-az),dx=(bx2-ax)/L,dz=(bz2-az)/L;for(let s=20;s<L-10;s+=32){for(const sd of[-1,1]){const x=ax+dx*s-dz*9*sd,z=az+dz*s+dx*9*sd;
+      if(Math.hypot(x,z)<50||(Math.abs(x)<258&&z<-62&&z>-578))continue;EB.cyl(x,4,z,.14,8,0x2a303c);EB.box(x+dz*sd*1.2,8,z-dx*sd*1.2,2.6,.2,.5,0x2a303c,Math.atan2(dx,dz)+Math.PI/2);
+      const c=(s/32|0)%3?PAL.cyan:PAL.org;tube(EN,EG,x+dz*sd*.2,7.85,z-dx*sd*.2,x+dz*sd*2.2,7.85,z-dx*sd*2.2,.05,c,.6);PERM.light(x+dz*sd*1.4,7.4,z-dx*sd*1.4,c,1.6,22);addBox(x-.15,0,z-.15,x+.15,8,z+.15)}}
+    NSP.push({k:r()<.5?'citizen':'worker',b:'patrol',path:[[ax+dx*12+dz*4,0,az+dz*12-dx*4],[bx2-dx*12+dz*4,0,bz2-dz*12-dx*4]]})}
+  for(let k=0;k<4;k++){const a=k/4*TAU;NSP.push({k:'drone',b:'patrol',path:Array.from({length:6},(_,m)=>[Math.cos(a+m)*60+Math.sin(m*2)*20,7+m%2*3,-40+Math.sin(a+m)*50])})}}
+// power pylons with sagging cables; the junction by the plaza sends a surge down the line
+const CABLE_MAT=new THREE.ShaderMaterial({uniforms:{uTime:U.time,uSurge:{value:-1},uOver:U.over},vertexShader:`attribute float s;varying float vS;void main(){vS=s;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader:`uniform float uTime,uSurge,uOver;varying float vS;void main(){float p=exp(-pow((vS-uSurge)*.05,2.)*40.);float tr=pow(fract(vS*.02-uTime*.15),30.)*.35;vec3 c=vec3(.03,.035,.045)+mix(vec3(.3,.95,1.),vec3(1.,.3,.06),uOver)*(p*3.+tr);gl_FragColor=vec4(c,1.);}`});
+{const pts=[];for(let k=0;k<9;k++){const t=k/8;pts.push([lerp(250,300,t)+(k%2)*6,lerp(-250,-150,t)+lerp(0,0,t)])}
+  const line2=[];for(let k=0;k<7;k++)line2.push([lerp(30,80,k/6)+20,lerp(-30,15,k/6)-k*0]);
+  const lines=[[[-40,-20],[-120,-10],[-200,-30],[-262,-60]],[[40,-20],[120,-40],[200,-70],[262,-100]]];let S0=0;
+  const pos=[],sa=[];for(const ln of lines){for(const[x,z]of ln){EB.box(x,9,z,.6,18,.6,0x2a303c);EB.box(x,17,z,6,.4,.4,0x2a303c);EB.box(x,13,z,4,.3,.3,0x2a303c);for(let y=2;y<17;y+=3)EB.box(x,y,z,1.6,.15,.15,0x323a48);addBox(x-.4,0,z-.4,x+.4,18,z+.4)}
+    for(let k=0;k<ln.length-1;k++)for(const off of[-2.6,2.6]){const[ax,az]=ln[k],[bx2,bz2]=ln[k+1],L=Math.hypot(bx2-ax,bz2-az);for(let m=0;m<24;m++){const t0=m/24,t1=(m+1)/24;
+        const y0=17-Math.sin(t0*Math.PI)*4,y1=17-Math.sin(t1*Math.PI)*4,ox=-(bz2-az)/L*off,oz=(bx2-ax)/L*off;pos.push(lerp(ax,bx2,t0)+ox,y0,lerp(az,bz2,t0)+oz,lerp(ax,bx2,t1)+ox,y1,lerp(az,bz2,t1)+oz);sa.push(S0+t0*L,S0+t1*L)}}
+    S0=0}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('s',new THREE.Float32BufferAttribute(sa.map((v,i)=>v),1));
+  // cable arc length per line: recompute cumulatively so the surge runs from the junction outward
+  {const s=g.attributes.s.array;let acc=0,last=null;for(let i=0;i<s.length;i+=2){const ax=pos[i*3],az=pos[i*3+2];if(last&&Math.hypot(ax-last[0],az-last[1])>3)acc=0;const bx2=pos[i*3+3],bz2=pos[i*3+5];s[i]=acc;acc+=Math.hypot(bx2-ax,bz2-az);s[i+1]=acc;last=[bx2,bz2]}}
+  const cl=new THREE.LineSegments(g,CABLE_MAT);PERM.add(cl);
+  chunk(-50,-30,50,-10,0,20,cx=>{pylon(cx,0,0,-24,PAL.amb,()=>{CABLE_MAT.uniforms.uSurge.value=0;AU.zap()},{h:2.4})},80,8)}
+// desert: scattered rocks + distant mesas
+{const r=rng(31),N=420,geo=new THREE.DodecahedronGeometry(1,0),im=new THREE.InstancedMesh(geo,stdMat(0x2a2420,{r:.95,m:0}),N);let n=0;const m4=new THREE.Matrix4();
+  for(let k=0;k<N;k++){const a=r()*TAU,R=120+r()*800,x=Math.cos(a)*R,z=Math.sin(a)*R-200;if(Math.abs(x)<300&&z<-30&&z>-610)continue;if(Math.abs(x+305)<40&&Math.abs(z+130)<45)continue;
+    const s=.5+r()*r()*6;m4.compose(_p.set(x,s*.3,z),_q.setFromEuler(_e.set(r()*3,r()*3,r()*3)),_s.set(s*(1+r()),s*(.5+r()*.6),s*(1+r())));im.setMatrixAt(n++,m4);if(s>2)addBox(x-s,0,z-s,x+s,s*.7,z+s)}
+  im.count=n;im.castShadow=im.receiveShadow=true;PERM.add(im);
+  const mb=new Batch();for(let k=0;k<40;k++){const a=k/40*TAU+r()*.1,R=1000+r()*250,w=40+r()*120,h=30+r()*90;mb.cyl(Math.cos(a)*R,h/2,Math.sin(a)*R-200,w,h,0x0e0d10,0,0,true);mb.cyl(Math.cos(a)*R,h+6,Math.sin(a)*R-200,w*.7,12,0x0e0d10,0,0,true)}
+  const mm=mb.mesh(stdMat(0xffffff,{vc:true,r:1,m:0}),false);mm.receiveShadow=false;PERM.add(mm);
+  for(let k=0;k<3;k++){const x=[60,-140,180][k],z=[-30,-40,70][k],ry=r()*3;EB.box(x,1.2,z,4,2.4,9,0x2a2622,ry);EB.box(x,2.8,z,3.6,1.2,4,0x232833,ry,.2);EB.box(x+1,.5,z,1.4,1,1.4,0x1a1a1a,ry+.4);addBox(x-4,0,z-4,x+4,2.6,z+4)}}
+PERM.add(EB.mesh(M.struct));PERM.add(EN.mesh(M.neonV,false));PERM.add(EG.mesh());PERM.add(EW.mesh(M.window,false));setRainRects();
