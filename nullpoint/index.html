@@ -826,7 +826,7 @@ function npcUpdate(dt,t){npcT-=dt;if(npcT<=0){npcT=.4;const sx=Math.floor(P.pos.
 
 // ---------- 12 player, camera, input ----------
 const P={pos:V3(0,0,0),vel:V3(),yaw:0,pitch:-.04,ground:true,dash:false,up:1,roll:0,fp:false,step:0,jumpHeld:false,face:0,inside:false,chest:V3(),R:rig('player',PAL.cyan),dist:4.6,fov:70};
-scene.add(P.R.root);P.R.root.rotation.order='YXZ';
+scene.add(P.R.root);P.R.root.rotation.order='YXZ';{const pl=new THREE.PointLight(0x4ff2ff,.35,6,2);pl.position.set(0,1.4,-1.2);P.R.root.add(pl)}
 const PR=.34,PH=1.76;
 const TRAILMAT=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
 const TRAIL={n:12,i:0,t:0,age:new Float32Array(12).fill(9),list:[],on:false};
@@ -835,7 +835,7 @@ P.R.root.updateMatrixWorld(true);P.R.root.traverse(o=>{if(o.isMesh&&o.material!=
 const TC=[new THREE.Color(PAL.cyan),new THREE.Color(PAL.mag)];
 function trailUpdate(dt){TRAIL.t-=dt;if(P.dash&&TRAIL.t<=0){TRAIL.t=.04;const k=TRAIL.i++%TRAIL.n;TRAIL.age[k]=0;for(const e of TRAIL.list){e.im.setMatrixAt(k,e.src.matrixWorld);e.im.instanceMatrix.needsUpdate=true}}
   let any=false;for(let k=0;k<TRAIL.n;k++){TRAIL.age[k]+=dt;if(TRAIL.age[k]<.5)any=true}
-  for(const e of TRAIL.list){e.im.visible=any;if(!any)continue;for(let k=0;k<TRAIL.n;k++){const f=Math.max(0,1-TRAIL.age[k]/.5);e.im.setColorAt(k,_c.copy(TC[k%2]).multiplyScalar(f*f*.55))}e.im.instanceColor.needsUpdate=true}}
+  for(const e of TRAIL.list){e.im.visible=any;if(!any)continue;for(let k=0;k<TRAIL.n;k++){const f=Math.max(0,1-TRAIL.age[k]/.5)*Math.min(1,TRAIL.age[k]/.1);e.im.setColorAt(k,_c.copy(TC[k%2]).multiplyScalar(f*f*.32))}e.im.instanceColor.needsUpdate=true}}
 const K={};let started=false,locked=false;
 addEventListener('keydown',e=>{if(!started)return;K[e.code]=true;if(e.code==='Space'||e.code.startsWith('Arrow'))e.preventDefault();if(e.repeat)return;
   if(e.code==='KeyV')P.fp=!P.fp;if(e.code==='KeyE')interact();if(e.code==='ShiftLeft'||e.code==='ShiftRight')AU.whoosh()});
