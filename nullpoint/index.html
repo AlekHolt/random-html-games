@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nullpoint</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#04060c}
+canvas{display:block}
+#gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 50%,#0b1120 0,#04060c 70%);cursor:pointer;z-index:5;transition:opacity .8s}
+#gate.off{opacity:0;pointer-events:none}
+#gate svg{width:120px;height:120px;animation:pulse 2.4s ease-in-out infinite;filter:drop-shadow(0 0 12px #4ff2ff)}
+@keyframes pulse{0%,100%{opacity:.35;transform:scale(.94)}50%{opacity:1;transform:scale(1.04)}}
+#keys{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:8px;width:max-content;max-width:calc(100vw - 32px);opacity:0;transition:opacity 1.2s;pointer-events:none;z-index:3}
+#keys.on{opacity:1}
+#keys b{font:600 12px ui-monospace,Menlo,Consolas,monospace;color:#4ff2ff;padding:7px 10px;border:1px solid rgba(79,242,255,.45);border-radius:8px;background:rgba(11,17,32,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);letter-spacing:.08em;box-shadow:inset 0 0 14px rgba(79,242,255,.18),0 0 10px rgba(79,242,255,.15)}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity 2.2s;z-index:4}
+#end{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 3s;z-index:6}
+#end svg{width:200px;height:200px;filter:drop-shadow(0 0 18px #4ff2ff) drop-shadow(0 0 40px #4ff2ff);animation:spin 40s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#gate svg,#end svg{animation:none;opacity:.9}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.147.0/three.min.js"></script>
+</head><body>
+<div id="gate"><svg viewBox="-50 -50 100 100" fill="none" stroke="#4ff2ff" stroke-width="3"><path d="M0-38 33 19-33 19Z" stroke-dasharray="150 30"/><circle r="6" fill="#4ff2ff" stroke="none"/></svg></div>
+<div id="keys"><b>W</b><b>A</b><b>S</b><b>D</b><b>Mouse</b><b>V</b><b>E</b><b>Space</b><b>Shift</b></div>
+<div id="fade"></div>
+<div id="end"><svg viewBox="-50 -50 100 100" fill="none" stroke="#4ff2ff" stroke-width="2.4"><path d="M0-40 34.6 20-34.6 20Z"/><path d="M0 40-34.6-20 34.6-20Z"/><circle r="44"/><circle r="14"/><circle r="4" fill="#4ff2ff"/></svg></div>
+<script>
+'use strict';
+/* ================= NULLPOINT =================
+   Textless neo-noir desert explorer. Sections:
+   1 core/utils · 2 shaders+materials · 3 batching · 4 collision · 5 streaming · 6 lights+interactables
+   7 sky/ground/rain · 8 props kit · 9 monolith · 10 outposts+exterior · 11 characters · 12 player/camera
+   13 audio · 14 progression · 15 loop */
+
+// ---------- 1 core ----------
+const TAU=Math.PI*2,clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,damp=(a,b,k,dt)=>a+(b-a)*(1-Math.exp(-k*dt));
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const V3=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
+const PAL={cyan:0x4ff2ff,mag:0xff3ea5,org:0xff4a1a,amb:0xffb347,ice:0xa9c7ff,red:0xff2a3a};
+const NEONS=[PAL.cyan,PAL.mag,PAL.org,PAL.cyan,PAL.ice];
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.35;
+document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x0a0a10,0.006);scene.background=new THREE.Color(0x0a0a10);
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.08,2600);
+const U={time:{value:0},over:{value:0},hue:{value:0},pulse:{value:0},warm:{value:0},flash:{value:0},beat:{value:0},
+  fogC:{value:scene.fog.color},fogD:{value:0.006},cam:{value:V3()},
+  lp:{value:Array.from({length:8},()=>V3(0,-999,0))},lc:{value:Array.from({length:8},()=>V3())}};
+
+// ---------- 2 shaders & materials ----------
+const GLN=`
+float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+1.),f.x),f.y);}
+float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*vn(p);p=p*2.03+17.1;a*=.5;}return s;}
+vec3 hueRot(vec3 c,float a){vec3 k=vec3(.57735);float ca=cos(a);return c*ca+cross(k,c)*sin(a)+k*dot(k,c)*(1.-ca);}
+`;
+const NEON_VS=`uniform vec3 uCol;varying vec3 vC,vW,vN;varying float vD;
+void main(){vec4 p=vec4(position,1.);vec3 n=normal;
+#ifdef USE_INSTANCING
+p=instanceMatrix*p;n=mat3(instanceMatrix)*n;
+#endif
+vC=uCol;
+#ifdef USE_COLOR
+vC*=color;
+#endif
+#ifdef USE_INSTANCING_COLOR
+vC*=instanceColor;
+#endif
+vec4 w=modelMatrix*p;vW=w.xyz;vN=normalize(mat3(modelMatrix)*n);vec4 mv=viewMatrix*w;vD=-mv.z;gl_Position=projectionMatrix*mv;}`;
+const NEON_FS=`uniform float uTime,uOver,uHue,uInt,uFlick,uHueAmt,fogD,uFlash;uniform vec3 fogC;varying vec3 vC,vW,vN;varying float vD;${GLN}
+void main(){vec3 c=hueRot(vC,uHue*uHueAmt);float fl=1.;
+if(uFlick>0.){float h=h21(floor(vW.xz*.34)+floor(vW.y*.26)*7.1);fl=step(.2,h)*(.45+.55*h)*(1.-.85*step(.985,fract(h*13.+uTime*(.02+h*.04))));}
+c=mix(c,vec3(1.,.27,.06)*(1.2+h21(floor(vW.xz*.34)+uTime)*.6*uFlash),uOver);
+float f=abs(dot(normalize(vN),normalize(cameraPosition-vW)));
+gl_FragColor=vec4(c*uInt*fl*(.75+.5*f)+vec3(.9)*pow(f,6.)*.3*uInt*fl,1.);
+#include <tonemapping_fragment>
+gl_FragColor.rgb=mix(gl_FragColor.rgb,fogC,1.-exp(-fogD*fogD*vD*vD));}`;
+function neonMat(o={}){return new THREE.ShaderMaterial({uniforms:{uTime:U.time,uOver:U.over,uHue:U.hue,uFlash:U.flash,fogC:U.fogC,fogD:U.fogD,
+  uInt:{value:o.int??1.5},uFlick:{value:o.flick||0},uHueAmt:{value:o.hue??1},uCol:{value:new THREE.Color(o.col??0xffffff)}},
+  vertexShader:NEON_VS,fragmentShader:NEON_FS,vertexColors:!!o.vc,side:o.side||THREE.FrontSide})}
+const HALO_VS=`attribute vec2 g;varying vec2 vG;varying vec3 vC;varying float vD;
+void main(){vG=g;vC=color;vec4 mv=modelViewMatrix*vec4(position,1.);vD=-mv.z;gl_Position=projectionMatrix*mv;}`;
+const HALO_FS=`uniform float uOver,uHue,uInt,fogD,uFlash;varying vec2 vG;varying vec3 vC;varying float vD;${GLN}
+void main(){float a=exp(-vG.y*vG.y*5.)*vG.x;vec3 c=mix(hueRot(vC,uHue),vec3(1.,.27,.06),uOver);
+gl_FragColor=vec4(c*a*uInt*exp(-fogD*fogD*vD*vD)*(1.+uOver*uFlash*1.5),1.);}`;
+const HALO=new THREE.ShaderMaterial({uniforms:{uOver:U.over,uHue:U.hue,uFlash:U.flash,fogD:U.fogD,uInt:{value:.55}},vertexShader:HALO_VS,fragmentShader:HALO_FS,
+  vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide});
+// standard material with world-space panel seams, core-2 pulse wave and core-3 overload baked in
+function stdMat(hex,o={}){const m=new THREE.MeshStandardMaterial({color:hex,roughness:o.r??.62,metalness:o.m??.35,vertexColors:!!o.vc,
+  emissive:o.em??0,transparent:!!o.tr,opacity:o.op??1,side:o.side||THREE.FrontSide,depthWrite:o.dw??true});
+  if(o.panel){const pz=o.panel.toFixed(2),pa=o.pulse?'1.':'0.';
+    m.onBeforeCompile=s=>{Object.assign(s.uniforms,{uTime:U.time,uPulse:U.pulse,uOver:U.over,uFlash:U.flash});
+      s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP,vWN;').replace('#include <project_vertex>',`#include <project_vertex>
+{vec4 wq=vec4(transformed,1.);
+#ifdef USE_INSTANCING
+wq=instanceMatrix*wq;
+#endif
+vWP=(modelMatrix*wq).xyz;vWN=normalize((vec4(transformedNormal,0.)*viewMatrix).xyz);}`);
+      s.fragmentShader=s.fragmentShader.replace('#include <common>',`#include <common>
+varying vec3 vWP,vWN;uniform float uTime,uPulse,uOver,uFlash;float ph(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}`)
+      .replace('#include <color_fragment>',`#include <color_fragment>
+vec3 an=abs(vWN);vec2 q=(an.x>.6?vWP.zy:(an.y>.6?vWP.xz:vWP.xy))/${pz};
+vec2 gq=abs(fract(q)-.5),fw=fwidth(q);float seam=max(smoothstep(.488-fw.x*1.5,.488,gq.x),smoothstep(.488-fw.y*1.5,.488,gq.y));
+float ph0=ph(floor(q));diffuseColor.rgb*=(.8+.35*ph0)*(1.-seam*.6);`)
+      .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+float band=pow(max(0.,sin(vWP.y*.07-uTime*2.4)),10.)*${pa};
+totalEmissiveRadiance+=vec3(1.,.14,.55)*band*uPulse*(.2+seam*2.6+ph0*.25);
+totalEmissiveRadiance+=vec3(1.,.25,.05)*uOver*(.05+seam*.7)*(.5+uFlash);`)};
+    m.customProgramCacheKey=()=>'np'+pz+pa}
+  return m}
+const M={
+  shell:stdMat(0xffffff,{vc:true,panel:4,pulse:true,r:.7,m:.25}),
+  struct:stdMat(0xffffff,{vc:true,panel:3,r:.66,m:.3}),
+  prop:stdMat(0xffffff,{vc:true,r:.5,m:.45}),
+  metal:stdMat(0x2a3140,{r:.3,m:.85}),chrome:stdMat(0x9aa6b8,{r:.18,m:1}),matte:stdMat(0x1b1e26,{r:.92,m:.05}),
+  dark:stdMat(0x11141b,{r:.55,m:.6}),glass:stdMat(0x0d1a26,{r:.05,m:.9,tr:true,op:.35,dw:false}),
+  neonV:neonMat({vc:true}),window:neonMat({vc:true,flick:1,hue:0,int:1.1}),
+  energy:new THREE.MeshBasicMaterial({color:0x4ff2ff,transparent:true,opacity:.28,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}),
+};
+const NM={};const neon=c=>NM[c]||(NM[c]=neonMat({col:c}));
+
+// ---------- 3 batching (merge thousands of boxes into one draw call) ----------
+const _m=new THREE.Matrix4(),_p=V3(),_q=new THREE.Quaternion(),_e=new THREE.Euler(),_s=V3(),_v=V3(),_w=V3(),_n3=new THREE.Matrix3(),_c=new THREE.Color();
+const keep=g=>(g.userData.keep=true,g);
+const TPL={box:keep(new THREE.BoxGeometry(1,1,1)),cyl:keep(new THREE.CylinderGeometry(.5,.5,1,14,1)),cyl6:keep(new THREE.CylinderGeometry(.5,.5,1,6,1)),
+  quad:keep(new THREE.PlaneGeometry(1,1)),sph:keep(new THREE.IcosahedronGeometry(.5,1)),cone:keep(new THREE.ConeGeometry(.5,1,10,1))};
+class Batch{constructor(){this.P=[];this.N=[];this.C=[];this.I=[];this.v=0}
+  add(g,m,col){const P=g.attributes.position.array,N=g.attributes.normal.array,I=g.index.array,n=P.length/3;_n3.getNormalMatrix(m);_c.set(col);
+    for(let k=0;k<n;k++){_v.fromArray(P,k*3).applyMatrix4(m);this.P.push(_v.x,_v.y,_v.z);_v.fromArray(N,k*3).applyMatrix3(_n3).normalize();this.N.push(_v.x,_v.y,_v.z);this.C.push(_c.r,_c.g,_c.b)}
+    for(let k=0;k<I.length;k++)this.I.push(I[k]+this.v);this.v+=n;return this}
+  mx(x,y,z,sx,sy,sz,rx=0,ry=0,rz=0){return _m.compose(_p.set(x,y,z),_q.setFromEuler(_e.set(rx,ry,rz)),_s.set(sx,sy,sz))}
+  box(x,y,z,sx,sy,sz,col,ry=0,rx=0,rz=0){return this.add(TPL.box,this.mx(x,y,z,sx,sy,sz,rx,ry,rz),col)}
+  bb(x0,y0,z0,x1,y1,z1,col){return this.box((x0+x1)/2,(y0+y1)/2,(z0+z1)/2,x1-x0,y1-y0,z1-z0,col)}
+  cyl(x,y,z,r,h,col,rx=0,rz=0,lo=false){return this.add(lo?TPL.cyl6:TPL.cyl,this.mx(x,y,z,r*2,h,r*2,rx,0,rz),col)}
+  quad(x,y,z,sx,sy,col,ry=0,rx=0){return this.add(TPL.quad,this.mx(x,y,z,sx,sy,1,rx,ry,0),col)}
+  geo(){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(this.P,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(this.N,3));
+    g.setAttribute('color',new THREE.Float32BufferAttribute(this.C,3));g.setIndex(this.v>65535?new THREE.Uint32BufferAttribute(this.I,1):new THREE.Uint16BufferAttribute(this.I,1));g.computeBoundingSphere();return g}
+  mesh(mat,sh=true){if(!this.v)return null;const m=new THREE.Mesh(this.geo(),mat);m.castShadow=sh;m.receiveShadow=true;m.matrixAutoUpdate=false;return m}}
+// soft additive glow ribbons (two crossed quads) used as the fake bloom around neon tubes
+class Glow{constructor(){this.P=[];this.G=[];this.C=[];this.I=[];this.v=0}
+  seg(ax,ay,az,bx,by,bz,w,col){const d=_v.set(bx-ax,by-ay,bz-az),L=d.length();d.normalize();_w.set(Math.abs(d.y)>.9?1:0,Math.abs(d.y)>.9?0:1,0);
+    const s1=V3().crossVectors(d,_w).normalize(),s2=V3().crossVectors(d,s1).normalize();_c.set(col);const e=w*.9,pts=[-e,0,L,L+e],gx=[0,1,1,0];
+    for(const s of[s1,s2]){const b=this.v;for(let i=0;i<4;i++)for(let j=-1;j<=1;j+=2){this.P.push(ax+d.x*pts[i]+s.x*w*j,ay+d.y*pts[i]+s.y*w*j,az+d.z*pts[i]+s.z*w*j);this.G.push(gx[i],j);this.C.push(_c.r,_c.g,_c.b)}
+      for(let i=0;i<3;i++){const k=b+i*2;this.I.push(k,k+1,k+2,k+1,k+3,k+2)}this.v+=8}return this}
+  mesh(){if(!this.v)return null;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(this.P,3));g.setAttribute('g',new THREE.Float32BufferAttribute(this.G,2));
+    g.setAttribute('color',new THREE.Float32BufferAttribute(this.C,3));g.setIndex(this.v>65535?new THREE.Uint32BufferAttribute(this.I,1):new THREE.Uint16BufferAttribute(this.I,1));g.computeBoundingSphere();
+    const m=new THREE.Mesh(g,HALO);m.renderOrder=3;m.matrixAutoUpdate=false;return m}}
+// neon tube + its glow in one call
+function tube(nb,gl,ax,ay,az,bx,by,bz,t,col,gw){const L=Math.hypot(bx-ax,by-ay,bz-az);_v.set(bx-ax,by-ay,bz-az).normalize();
+  _q.setFromUnitVectors(_w.set(0,1,0),_v);_m.compose(_p.set((ax+bx)/2,(ay+by)/2,(az+bz)/2),_q,_s.set(t,L,t));nb.add(TPL.cyl6,_m,col);if(gl)gl.seg(ax,ay,az,bx,by,bz,gw??t*5,col)}
+
+// ---------- 4 collision: AABBs in a 2D spatial hash ----------
+const CW={cell:16,map:new Map(),stamp:0};
+const ck=(i,j)=>(i+500)*2048+(j+500);
+function addBox(x0,y0,z0,x1,y1,z1,f){const b={x0,y0,z0,x1,y1,z1,on:true,ill:!!(f&&f.ill),s:0,cells:[]},c=CW.cell;
+  for(let i=Math.floor(x0/c);i<=Math.floor(x1/c);i++)for(let j=Math.floor(z0/c);j<=Math.floor(z1/c);j++){const k=ck(i,j);let a=CW.map.get(k);if(!a)CW.map.set(k,a=[]);a.push(b);b.cells.push(a)}return b}
+function delBox(b){for(const a of b.cells){const i=a.indexOf(b);if(i>=0)a.splice(i,1)}b.cells.length=0;b.on=false}
+const _qr=[];
+function query(x0,z0,x1,z1){_qr.length=0;const st=++CW.stamp,c=CW.cell;
+  for(let i=Math.floor(x0/c);i<=Math.floor(x1/c);i++)for(let j=Math.floor(z0/c);j<=Math.floor(z1/c);j++){const a=CW.map.get(ck(i,j));if(a)for(const b of a)if(b.s!==st&&b.on){b.s=st;_qr.push(b)}}return _qr}
+function pointSolid(x,y,z){for(const b of query(x,z,x,z))if(!b.ill&&x>b.x0&&x<b.x1&&y>b.y0&&y<b.y1&&z>b.z0&&z<b.z1)return true;return false}
+// permanent solid: visual box in batch + collider
+function solid(bt,x0,y0,z0,x1,y1,z1,col,f){if(bt)bt.bb(x0,y0,z0,x1,y1,z1,col);return addBox(x0,y0,z0,x1,y1,z1,f)}
+
+// ---------- 5 streaming: chunks build/dispose by distance, budgeted per frame ----------
+const ST={chunks:[],queue:[],built:0};
+const INTS=new Set(),LNODES=new Set(),UPS=new Set();
+class Ctx{constructor(){this.g=new THREE.Group();this.boxes=[];this.ints=[];this.lights=[];this.ups=[];this.g.matrixAutoUpdate=false}
+  add(o){this.g.add(o);return o}
+  solid(bt,x0,y0,z0,x1,y1,z1,col,f){const b=solid(bt,x0,y0,z0,x1,y1,z1,col,f);this.boxes.push(b);return b}
+  mesh(bt,mat,sh){const m=bt.mesh(mat,sh);if(m)this.g.add(m);return m}
+  glow(gl){const m=gl.mesh();if(m)this.g.add(m);return m}
+  int(o){INTS.add(o);this.ints.push(o);return o}
+  light(x,y,z,col,i=2,d=26){const n={p:V3(x,y,z),c:new THREE.Color(col),i,d,mul:1};LNODES.add(n);this.lights.push(n);return n}
+  up(fn){UPS.add(fn);this.ups.push(fn);return fn}
+  dispose(){this.g.traverse(o=>{if(o.geometry&&!o.geometry.userData.keep)o.geometry.dispose()});scene.remove(this.g);
+    this.boxes.forEach(delBox);this.ints.forEach(o=>INTS.delete(o));this.lights.forEach(o=>LNODES.delete(o));this.ups.forEach(o=>UPS.delete(o))}}
+function chunk(x0,z0,x1,z1,y0,y1,build,r=60,seed){ST.chunks.push({x0,z0,x1,z1,y0,y1,build,r,st:0,ctx:null,d:0,seed:seed??ST.chunks.length*7919+13})}
+function chunkDist(c,p){const dx=Math.max(c.x0-p.x,0,p.x-c.x1),dz=Math.max(c.z0-p.z,0,p.z-c.z1),dy=Math.max(c.y0-p.y,0,p.y-c.y1)*1.6;return Math.hypot(dx,dy,dz)}
+function streamUpdate(p){for(const c of ST.chunks){const d=chunkDist(c,p);c.d=d;
+    if(c.st===0){if(d<c.r){c.st=1;ST.queue.push(c)}}
+    else if(c.st===2){if(d>c.r+45){c.ctx.dispose();c.ctx=null;c.st=0;ST.built--}else c.ctx.g.visible=d<c.r+18}
+    else if(c.st===1&&d>c.r+45)c.st=0}
+  ST.queue=ST.queue.filter(c=>c.st===1).sort((a,b)=>a.d-b.d)}
+function streamWork(budget){const t0=performance.now();
+  while(ST.queue.length&&performance.now()-t0<budget){const c=ST.queue.shift();if(c.st!==1)continue;const x=new Ctx();c.build(x,rng(c.seed));
+    x.g.updateMatrixWorld(true);scene.add(x.g);c.ctx=x;c.st=2;ST.built++}}
+
+// ---------- 6 light pool + interactables ----------
+// only 8 real PointLights exist; each tick they jump to the 8 most relevant neon nodes near the player
+const POOL=[];for(let i=0;i<8;i++){const l=new THREE.PointLight(0xffffff,0,26,2);scene.add(l);POOL.push({l,n:null,k:0})}
+const PERM=new Ctx();scene.add(PERM.g);
+let lightT=0;
+function lightUpdate(p,dt){lightT-=dt;
+  if(lightT<=0){lightT=.25;const arr=[];for(const n of LNODES){const d=n.p.distanceTo(p);if(d<n.d+60)arr.push([d-n.i*3,n])}
+    arr.sort((a,b)=>a[0]-b[0]);const top=new Set(arr.slice(0,8).map(a=>a[1]));
+    for(const s of POOL)if(s.n&&!top.has(s.n))s.n=null;
+    for(const s of POOL)for(const n of s.n?[]:top)if(!POOL.some(o=>o.n===n)){s.n=n;s.l.intensity=0;break}}
+  POOL.forEach((s,i)=>{const n=s.n;if(!n||!LNODES.has(n)){s.n=null;s.l.intensity=damp(s.l.intensity,0,6,dt);U.lc.value[i].multiplyScalar(.9);return}
+    s.l.position.copy(n.p);s.l.color.copy(n.c);s.l.distance=n.d;s.l.intensity=damp(s.l.intensity,n.i*n.mul,5,dt);
+    U.lp.value[i].copy(n.p);U.lc.value[i].set(n.c.r,n.c.g,n.c.b).multiplyScalar(Math.min(s.l.intensity,3)*.35)})}
+
+// ---------- 7 sky, ground, rain ----------
+const OUT={relay:[-70,25],shack:[85,30],reactor:[300,-150],alley:[-305,-130],dorm:[30,150]};
+const ROADS=[[0,0,0,-70],[0,0,-70,25],[0,0,85,30],[85,30,300,-150],[-70,25,-305,-130],[0,0,30,150],[-305,-130,-262,-300],[300,-150,262,-320]];
+const RAINR=[];// [x0,z0,x1,z1,yTop] roofs that keep rain out
+const skyMat=new THREE.ShaderMaterial({uniforms:{uTime:U.time,uFlash:U.flash,uWarm:U.warm,uOver:U.over,uPulse:U.pulse,fogC:U.fogC},depthWrite:false,side:THREE.BackSide,
+  vertexShader:`varying vec3 vD;void main(){vD=position;vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_Position=p.xyww;}`,
+  fragmentShader:`uniform float uTime,uFlash,uWarm,uOver,uPulse;uniform vec3 fogC;varying vec3 vD;${GLN}
+void main(){vec3 d=normalize(vD);float h=d.y;vec2 uv=d.xz/(max(h,0.)+.18);
+float cl=fbm(uv*1.6+vec2(uTime*.012,uTime*.004))*.7+fbm(uv*4.-uTime*.02)*.3;
+vec3 col=mix(fogC,vec3(.012,.013,.028),smoothstep(0.,.55,h));
+col+=cl*vec3(.035,.035,.06)*smoothstep(-.02,.35,h);
+col+=cl*exp(-max(h,0.)*5.)*(vec3(.12,.03,.09)+vec3(.02,.09,.11))*.6;
+col+=uFlash*vec3(.55,.6,.85)*cl*smoothstep(-.1,.4,h);
+col*=mix(vec3(1.),vec3(1.3,1.05,.82),uWarm*.6);col+=uPulse*vec3(.08,.01,.05)*cl*exp(-max(h,0.)*3.);
+col=mix(col,vec3(.4,.07,.01)*(.4+cl),uOver*.85);
+col=mix(fogC,col,smoothstep(-.02,.06,h));
+gl_FragColor=vec4(col,1.);}`});
+const sky=new THREE.Mesh(new THREE.SphereGeometry(2000,32,16),skyMat);sky.frustumCulled=false;sky.renderOrder=-1;scene.add(sky);
+// wet asphalt/hardpan ground: noise puddles, rain ripples, fake neon reflection streaks from the light pool
+const groundMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.8,metalness:0});
+groundMat.onBeforeCompile=s=>{Object.assign(s.uniforms,{uTime:U.time,uHue:U.hue,uOver:U.over,uLP:U.lp,uLC:U.lc,uWarm:U.warm,uRoad:{value:ROADS.map(r=>new THREE.Vector4(...r))}});
+  s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;').replace('#include <project_vertex>','#include <project_vertex>\nvWP=(modelMatrix*vec4(transformed,1.)).xyz;');
+  s.fragmentShader=s.fragmentShader.replace('#include <common>',`#include <common>
+varying vec3 vWP;uniform float uTime,uHue,uOver,uWarm;uniform vec3 uLP[8],uLC[8];uniform vec4 uRoad[8];${GLN}
+float sdSeg(vec2 p,vec2 a,vec2 b){vec2 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h);}`)
+  .replace('#include <color_fragment>',`#include <color_fragment>
+vec2 xz=vWP.xz;float dR=1e4;for(int i=0;i<8;i++)dR=min(dR,sdSeg(xz,uRoad[i].xy,uRoad[i].zw)-8.);
+dR=min(dR,max(abs(xz.x)-275.,abs(xz.y+320.)-275.));dR=min(dR,length(xz)-48.);
+float big=fbm(xz*.05);float asph=1.-smoothstep(0.,22.,dR+big*14.);
+float pud=smoothstep(.55,.7,fbm(xz*.07+3.))*asph+smoothstep(.6,.72,fbm(xz*.03))*(1.-asph)*.7;
+vec3 sand=vec3(.07,.055,.045)*(.6+.6*fbm(xz*.02))*(.85+.15*sin(xz.x*.04+big*9.));
+vec3 asc=vec3(.03,.032,.04)*(.75+.5*vn(xz*2.3))*(1.+.4*smoothstep(.4,.5,abs(fract(xz.x*.5)-.5))*0.);
+diffuseColor.rgb=mix(sand,asc,asph)*(1.-pud*.65);`)
+  .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+roughnessFactor=mix(mix(.95,.6,asph),.035,pud);`)
+  .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+vec2 pr=vec2(vn(xz*3.+vec2(.1,0.))-vn(xz*3.-vec2(.1,0.)),vn(xz*3.+vec2(0.,.1))-vn(xz*3.-vec2(0.,.1)))*(1.-pud*.85)*.9;
+vec2 rc=floor(xz*1.1),rf=fract(xz*1.1)-.5;float rh=h21(rc);float rt=fract(uTime*1.25+rh);vec2 ro=rf-(vec2(h21(rc+3.),h21(rc+7.))-.5)*.5;float rr=length(ro);
+float ring=sin((rr-rt*.5)*70.)*exp(-rr*7.)*(1.-rt)*smoothstep(0.,.08,rt);pr+=ro/max(rr,.001)*ring*.4*(.3+pud);
+pr+=vec2(sin(xz.y*.9+uTime*.7+big*20.),cos(xz.x*.8-uTime*.6+big*20.))*.025*pud;
+normal=normalize(normal+(viewMatrix*vec4(pr.x,0.,pr.y,0.)).xyz);`)
+  .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+{vec3 V=normalize(cameraPosition-vWP);vec3 R=reflect(-V,normalize(vec3(pr.x,1.,pr.y)));vec3 refl=vec3(0.);
+for(int i=0;i<8;i++){vec3 L=uLP[i];L.y=-L.y;vec3 d=L-vWP;float dist=length(d);d/=dist;
+float hh=1.-dot(normalize(R.xz+1e-4),normalize(d.xz+1e-4));float vv=R.y-d.y;refl+=uLC[i]*exp(-hh*900.)*exp(-vv*vv*14.)*(40./(dist+12.));}
+refl+=vec3(.03,.032,.05)*(1.+uWarm*.5)*pow(1.-max(V.y,0.),4.);
+totalEmissiveRadiance+=refl*(pud*1.1+asph*.22);
+float gm=1.-smoothstep(28.,46.,length(xz));vec2 gg=abs(fract(xz/6.)-.5);float gl=max(smoothstep(.465,.5,gg.x),smoothstep(.465,.5,gg.y));
+vec3 gc=mix(hueRot(vec3(.25,.9,1.),uHue),vec3(1.,.27,.06),uOver);
+totalEmissiveRadiance+=gc*gl*gm*(.45+.25*sin(uTime*2.-length(xz)*.25));
+float lane=(1.-smoothstep(.12,.2,abs(dR+8.)))*step(.5,fract(dot(xz,vec2(.7071))*.08))*asph*0.;
+totalEmissiveRadiance+=gc*lane;}`)};
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(2400,2400),groundMat);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;ground.renderOrder=-.5;scene.add(ground);
+// rain: 16k camera-wrapped streak quads, culled under roofs in the vertex shader
+const rainU={uTime:U.time,uWarm:U.warm,uOver:U.over,uFlash:U.flash,uCam:U.cam,uRect:{value:Array.from({length:12},()=>new THREE.Vector4(0,0,0,0))},uRY:{value:new Float32Array(12)}};
+const rain=(()=>{const N=16000,pos=new Float32Array(N*4*3),sd=new Float32Array(N*4*3),cr=new Float32Array(N*4*2),idx=new Uint32Array(N*6),r=rng(9);
+  for(let i=0;i<N;i++){const a=r(),b=r(),c=r();for(let k=0;k<4;k++){const o=i*4+k;sd.set([a,b,c],o*3);cr.set([k&1?1:-1,k>>1],o*2)}idx.set([i*4,i*4+1,i*4+2,i*4+1,i*4+3,i*4+2],i*6)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('seed',new THREE.BufferAttribute(sd,3));g.setAttribute('corner',new THREE.BufferAttribute(cr,2));g.setIndex(new THREE.BufferAttribute(idx,1));
+  const m=new THREE.Mesh(g,new THREE.ShaderMaterial({uniforms:rainU,transparent:true,depthWrite:false,
+  vertexShader:`uniform vec3 uCam;uniform float uTime;uniform vec4 uRect[12];uniform float uRY[12];attribute vec3 seed;attribute vec2 corner;varying float vA,vT;
+void main(){const float B=72.,H=46.;vec3 c;c.x=uCam.x+mod(seed.x*B-uCam.x,B)-B*.5;c.z=uCam.z+mod(seed.z*B-uCam.z,B)-B*.5;
+float sp=26.+seed.y*10.;c.y=uCam.y-H*.4+mod(seed.y*H*7.-uTime*sp,H);
+float hide=step(c.y,0.);for(int i=0;i<12;i++){vec4 r=uRect[i];if(c.x>r.x&&c.x<r.z&&c.z>r.y&&c.z<r.w&&c.y<uRY[i])hide=1.;}
+vec3 vel=normalize(vec3(2.2,-sp,.9));vec3 toC=c-cameraPosition;float dc=length(toC);
+vec3 side=normalize(cross(vel,toC/dc))*.012*(1.+dc*.03);vec3 p=c+side*corner.x-vel*(.7+seed.z*.6)*corner.y;
+vA=(1.-hide)*smoothstep(.6,3.,dc)*(1.-smoothstep(25.,36.,dc));vT=corner.y;
+gl_Position=hide>.5?vec4(2.,2.,2.,1.):projectionMatrix*viewMatrix*vec4(p,1.);}`,
+  fragmentShader:`uniform float uWarm,uOver,uFlash;varying float vA,vT;void main(){vec3 c=mix(vec3(.55,.62,.75),vec3(.3,.95,1.),uWarm*.75);c=mix(c,vec3(1.,.35,.1),uOver);
+gl_FragColor=vec4(c*(1.+uFlash*2.),vA*(1.-vT)*.42);}`}));
+  m.frustumCulled=false;m.renderOrder=4;scene.add(m);return m})();
+function setRainRects(){RAINR.slice(0,12).forEach((r,i)=>{rainU.uRect.value[i].set(r[0],r[1],r[2],r[3]);rainU.uRY.value[i]=r[4]})}
+// lights
+const hemi=new THREE.HemisphereLight(0x223055,0x0a0608,.55);scene.add(hemi);
+const amb=new THREE.AmbientLight(0x101522,.5);scene.add(amb);
+const moon=new THREE.DirectionalLight(0x8fa6d8,.55);moon.position.set(-60,120,40);moon.castShadow=true;
+moon.shadow.mapSize.set(2048,2048);Object.assign(moon.shadow.camera,{left:-70,right:70,top:70,bottom:-70,near:1,far:400});moon.shadow.bias=-.0006;moon.shadow.normalBias=.04;
+scene.add(moon,moon.target);
