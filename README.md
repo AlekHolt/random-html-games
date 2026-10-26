@@ -27,7 +27,9 @@ open the file and it plays. Everything is generated at runtime in code.
 
 ```
 random-html-games/
-├── index.html          ← landing page listing every game
+├── index.html          ← landing page (BUILT from site/, don't edit by hand)
+├── site-assets/        ← landing page JS/CSS (built)
+├── site/               ← landing page source: Vite + React + Tailwind + Magic UI
 ├── LICENSE
 ├── Game Tester - Helios/  ← QA agent: reviews, bug IDs, test requests
 ├── Designer - Phobos/     ← design agent: style guide, 3D models, model viewer, design requests
@@ -38,13 +40,22 @@ random-html-games/
 ```
 
 Each game is fully self-contained in its own folder, so you can download a single `index.html`
-and it still works. The root `index.html` is just an index that links to them.
+and it still works. The games never depend on the landing page or its build.
+
+The landing page is the only part with a build step. It gives each game a full-screen page with a
+screenshot carousel, description and a themed animated scene, a collapsible sidebar to jump between
+games, and a site theme that cross-fades to the game you're looking at. It builds straight into the
+repo root, so GitHub Pages keeps serving the repo as it is.
 
 ### Adding a game
 
-1. Drop it in a new folder as `<game-name>/index.html`, with its own `README.md` and `screenshots/`.
-2. Copy an `<article class="card">` block in the root `index.html` and point it at the new folder.
-3. Add a row to the table above.
+1. Drop it in a new folder as `<game-name>/index.html`, with its own `README.md` and `screenshots/`
+   (16:9 shots, about 1600×900, work best on the landing page).
+2. Add an entry to `site/src/games.ts` (title, copy, screenshots, theme colours) and a scene in
+   `site/src/components/scenes/`, then register the scene in `site/src/App.tsx`.
+3. Rebuild the landing page: `cd site && npm install && npm run build`. Commit the updated
+   `index.html` and `site-assets/`.
+4. Add a row to the table above.
 
 ## Running locally
 
@@ -56,6 +67,8 @@ python3 -m http.server 8000
 
 Then open <http://localhost:8000/>. Individual games also work by opening their `index.html`
 directly from the filesystem.
+
+To work on the landing page with hot reload: `cd site && npm install && npm run dev`.
 
 ## License
 

@@ -1,161 +1,22 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Random HTML Games</title>
-<meta name="description" content="Single-file browser games. No installs, no build steps — open the file and play.">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap">
-<style>
-:root{
-  --ink:#05070e; --panel:#0b1120; --line:rgba(130,170,220,.17);
-  --cyan:#4ff2ff; --mag:#ff3ea5; --amber:#ffb347;
-  --text:#dbe7ff; --dim:#8094bb; --faint:#56688d;
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{
-  background:var(--ink); color:var(--text);
-  font-family:'Rajdhani',system-ui,-apple-system,'Segoe UI',sans-serif;
-  -webkit-font-smoothing:antialiased;
-  min-height:100%;
-  background-image:
-    radial-gradient(900px 420px at 18% -8%, rgba(79,242,255,.10), transparent 70%),
-    radial-gradient(760px 380px at 86% 4%, rgba(255,62,165,.10), transparent 70%);
-  background-repeat:no-repeat;
-}
-.wrap{max-width:1080px;margin:0 auto;padding:56px 24px 80px}
-
-header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:38px}
-.eyebrow{font:700 11px/1 'Rajdhani';letter-spacing:.42em;color:var(--faint);text-transform:uppercase}
-h1{
-  font:900 clamp(30px,6vw,52px)/1.05 'Orbitron',monospace;
-  letter-spacing:.04em;margin:14px 0 0;text-wrap:balance;
-  background:linear-gradient(100deg,var(--cyan) 10%,#a9c7ff 48%,var(--mag) 92%);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-header p{font:600 17px/1.6 'Rajdhani';color:var(--dim);max-width:60ch;margin:16px 0 0}
-header p b{color:var(--text);font-weight:700}
-
-.grid{display:grid;gap:26px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
-
-.card{
-  display:flex;flex-direction:column;
-  background:linear-gradient(180deg,rgba(14,20,36,.92),rgba(8,12,22,.92));
-  border:1px solid var(--line);border-radius:14px;overflow:hidden;
-  transition:border-color .18s ease, transform .18s ease;
-}
-.card:hover{border-color:rgba(79,242,255,.45);transform:translateY(-3px)}
-a.shotlink{display:block;line-height:0}
-.shot{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:#070a12;border-bottom:1px solid var(--line)}
-.body{padding:20px 20px 22px;display:flex;flex-direction:column;gap:12px;flex:1}
-.title{font:800 20px/1.15 'Orbitron',monospace;letter-spacing:.06em;margin:0;color:#eaf4ff}
-.tags{display:flex;flex-wrap:wrap;gap:6px}
-.tag{
-  font:700 10px/1 'Rajdhani';letter-spacing:.16em;text-transform:uppercase;
-  color:#79d6e6;background:rgba(79,242,255,.09);
-  border:1px solid rgba(79,242,255,.22);border-radius:999px;padding:5px 9px;
-}
-.blurb{font:600 14.5px/1.62 'Rajdhani';color:var(--dim);margin:0;flex:1}
-.actions{display:flex;gap:10px;margin-top:4px}
-.btn{
-  font:700 12px/1 'Rajdhani';letter-spacing:.16em;text-transform:uppercase;
-  padding:11px 17px;border-radius:8px;text-decoration:none;
-  border:1px solid rgba(130,170,220,.26);color:#b9cdf0;
-  transition:all .16s ease;
-}
-.btn:hover{border-color:rgba(130,170,220,.5);color:#eaf4ff}
-.btn.play{
-  border-color:rgba(79,242,255,.6);color:#061018;
-  background:linear-gradient(135deg,var(--cyan),#7ee0ff);
-  box-shadow:0 0 22px rgba(79,242,255,.22);
-}
-.btn.play:hover{box-shadow:0 0 30px rgba(79,242,255,.4);color:#061018}
-.btn:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
-
-footer{margin-top:56px;padding-top:24px;border-top:1px solid var(--line);
-  font:600 13px/1.8 'Rajdhani';color:var(--faint);letter-spacing:.06em}
-footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid rgba(130,170,220,.25)}
-footer a:hover{color:var(--cyan);border-color:var(--cyan)}
-@media (prefers-reduced-motion:reduce){.card{transition:none}.card:hover{transform:none}}
-</style>
-</head>
-<body>
-<div class="wrap">
-
-<header>
-  <div class="eyebrow">AlekHolt</div>
-  <h1>Random HTML Games</h1>
-  <p>Browser games that live in <b>one HTML file each</b>. No installs, no build step, no asset
-     downloads — open the file and it plays. Everything you see is generated at runtime in code.</p>
-</header>
-
-<main class="grid">
-
-  <!-- ─── add a new game by copying one of these blocks ─── -->
-  <article class="card">
-    <a class="shotlink" href="neon-run/"><img class="shot" src="neon-run/screenshots/chase.jpg"
-         alt="A sports car on a neon-lit elevated highway at night, skyscrapers on both sides"
-         loading="lazy" width="1600" height="900"></a>
-    <div class="body">
-      <h2 class="title">Neon Run</h2>
-      <div class="tags"><span class="tag">WebGL</span><span class="tag">three.js</span>
-        <span class="tag">Procedural</span><span class="tag">Driving</span></div>
-      <p class="blurb">An endless night-city highway racer. The road is an infinite spline built from
-        layered-noise curvature, the city streams in and out around you, and ramps hand you between
-        two levels of elevated expressway. Procedural cars, analytic night lighting, synthesised
-        engine audio — no assets at all.</p>
-      <div class="actions">
-        <a class="btn play" href="neon-run/">Play</a>
-        <a class="btn" href="https://github.com/AlekHolt/random-html-games/tree/main/neon-run">Source</a>
-      </div>
-    </div>
-  </article>
-
-  <article class="card">
-    <a class="shotlink" href="voidwake/"><img class="shot" src="voidwake/screenshots/rings.jpg"
-         alt="A starfighter flying toward a banded violet gas giant with wide rings, a frozen moon and asteroids nearby"
-         loading="lazy" width="1920" height="1080"></a>
-    <div class="body">
-      <h2 class="title">Voidwake</h2>
-      <div class="tags"><span class="tag">WebGL</span><span class="tag">three.js</span>
-        <span class="tag">Procedural</span><span class="tag">Exploration</span></div>
-      <p class="blurb">A No Man's Sky–style space explorer. Fly a starship between shader-generated
-        worlds, including a paradise planet, a toxic wasteland and a ringed gas giant with a frozen moon.
-        Dive through an analytic atmosphere, land on a streamed surface and mine crystals for the carbon
-        that fuels your ship. Synthesised soundtrack, no assets at all.</p>
-      <div class="actions">
-        <a class="btn play" href="voidwake/">Play</a>
-        <a class="btn" href="https://github.com/AlekHolt/random-html-games/tree/main/voidwake">Source</a>
-      </div>
-    </div>
-  </article>
-
-  <article class="card">
-    <a class="shotlink" href="nullpoint/"><img class="shot" src="nullpoint/screenshots/monolith.jpg"
-         alt="A cybernetic figure dashing past a rain-soaked neon monolith, leaving cyan and magenta afterimages"
-         loading="lazy" width="1920" height="1080"></a>
-    <div class="body">
-      <h2 class="title">Nullpoint</h2>
-      <div class="tags"><span class="tag">WebGL</span><span class="tag">three.js</span>
-        <span class="tag">Procedural</span><span class="tag">Textless</span></div>
-      <p class="blurb">A neo-noir desert explorer with no words at all. Wake three anomaly cores hidden in a
-        streamed 500 m neon monolith and its outposts, using nothing but the keys you're shown for five seconds.
-        Wet-asphalt reflections, shader rain, articulated cyborg NPCs and a synthesised soundtrack.</p>
-      <div class="actions">
-        <a class="btn play" href="nullpoint/">Play</a>
-        <a class="btn" href="https://github.com/AlekHolt/random-html-games/tree/main/nullpoint">Source</a>
-      </div>
-    </div>
-  </article>
-
-</main>
-
-<footer>
-  MIT licensed · <a href="https://github.com/AlekHolt/random-html-games">github.com/AlekHolt/random-html-games</a>
-</footer>
-
-</div>
-</body>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Random HTML Games</title>
+    <meta name="description" content="Browser games that live in one HTML file each. No installs, no downloads: worlds, cars, ships and sound are all generated in code." />
+    <meta name="theme-color" content="#05070e" />
+    <meta property="og:title" content="Random HTML Games" />
+    <meta property="og:description" content="Single-file browser games: Neon Run, Voidwake and more. Open it and play." />
+    <meta property="og:image" content="voidwake/screenshots/hero-orbit.jpg" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2305070e'/%3E%3Cpath d='M9 11h14v10H9z' fill='none' stroke='%234ff2ff' stroke-width='2.5' stroke-linejoin='round'/%3E%3Ccircle cx='20' cy='16' r='2' fill='%23ff3ea5'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" />
+    <script type="module" crossorigin src="./site-assets/index-Bjn8_5KP.js"></script>
+    <link rel="stylesheet" crossorigin href="./site-assets/index-BzayAmu5.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>
