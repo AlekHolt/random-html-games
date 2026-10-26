@@ -645,7 +645,7 @@ function building(cx0,cz0,w,d,h,doors,col=0x20252f,o={}){const x0=cx0-w/2,x1=cx0
 {const r=rng(3);EB.cyl(0,.01,0,1.6,.04,0x1b1f27);for(let k=0;k<6;k++){const a=k/6*TAU;EN.box(Math.cos(a)*1.4,.04,Math.sin(a)*1.4,.6,.02,.06,PAL.cyan,-a+Math.PI/2)}
   for(let k=0;k<14;k++){const a=k/14*TAU+.1,R=40+r()*6;if(Math.abs(Math.sin(a))>.92||Math.abs(a-4.9)<.25)continue;EB.box(Math.cos(a)*R,.5,Math.sin(a)*R,2.2,1,.6,0x2a303c,-a);EN.box(Math.cos(a)*R,1.02,Math.sin(a)*R,2,.04,.62,k%3?PAL.org:PAL.cyan,-a);
     addBox(Math.cos(a)*R-1.1,0,Math.sin(a)*R-1.1,Math.cos(a)*R+1.1,1,Math.sin(a)*R+1.1)}
-  chunk(-50,-50,50,50,0,20,cx=>{pylon(cx,16,0,-10,PAL.cyan,()=>{HUE.t+=TAU/3});vent(cx,-56,0,24,10,'relayV',1,1.4)},90,7)}
+  chunk(-50,-50,50,50,0,20,cx=>{pylon(cx,16,0,-10,PAL.cyan,()=>{HUE.t+=TAU/3});vent(cx,-57.5,0,15,10,'relayV',1,1.4)},90,7)}
 const HUE={t:0};
 // O1 relay station
 {const[cx0,cz0]=OUT.relay,B=building(cx0,cz0,20,14,7,[['e',0,3.4,4]]);EB.cyl(cx0-5,7.5+4,cz0,.3,8,0x3a4252);EB.cyl(cx0+4,8.2,cz0-3,2.4,.3,0x2a303c,.6);EB.cyl(cx0+4,7.6,cz0-3,.3,1.2,0x3a4252);
@@ -690,7 +690,7 @@ const ILL_MAT=new THREE.ShaderMaterial({uniforms:{uTime:U.time,fogC:U.fogC,fogD:
   wall(EB,'z',-156,-136,-315,0,9,.6,[],0x06070a);wall(EB,'z',-156,-136,-295,0,9,.6,[],0x06070a);wall(EB,'x',-315,-295,-156,0,9,.6,[],0x06070a);solid(EB,-315,8.4,-156,-295,9,-136.3,0x06070a);
   addBox(-307,0,-136.4,-303,9,-135.8,{ill:true});const iw=new THREE.Mesh(TPL.box,ILL_MAT);iw.position.set(-305,4.5,-136.1);iw.scale.set(4,9,.6);PERM.add(iw);
   for(let z=-134;z<-102;z+=4){EB.cyl(-306.6,6+((z/4)%2)*1.2,z,.18,4,0x353d4c,Math.PI/2);EB.box(-303.4,3+Math.abs(z%3),z,.5,1.2,1.4,0x2a303c)}
-  EB.box(-305,.7,-110,2.4,1.4,1.2,0x2a3a2a);addBox(-306.2,0,-110.6,-303.8,1.4,-109.4);
+  EB.box(-306,.7,-110,1.6,1.4,1.2,0x2a3a2a);addBox(-306.8,0,-110.6,-305.2,1.4,-109.4);
   chunk(-333,-160,-277,-100,0,13,(cx,r)=>{door(cx,A.x0,0,-118,3,3.8,'z','alleyA',{col:PAL.mag});door(cx,Bb.x1,0,-118,3,3.8,'z','alleyB');
     const sm=screenMat(PAL.mag,0,4.4),sg=mk(TPL.quad,sm,-306.68,6,-120,3,1.6,1);sg.rotation.y=Math.PI/2;cx.add(sg);cx.light(-305,6,-120,PAL.mag,1.2,10);cx.up(()=>{sm.uniforms.uAct.value=Math.random()<.04?2:.2});
     terminal(cx,A.x0+3,0,-108,Math.PI/2,PAL.mag,r);consoleWall(cx,-320,0,-135.4,0,10,3.2,PAL.mag,r);for(let k=0;k<6;k++)rack(cx,A.x1-1.2,0,-130+k*1.15,-Math.PI/2,PAL.mag,r);
@@ -732,7 +732,7 @@ const CABLE_MAT=new THREE.ShaderMaterial({uniforms:{uTime:U.time,uSurge:{value:-
   // cable arc length per line: recompute cumulatively so the surge runs from the junction outward
   {const s=g.attributes.s.array;let acc=0,last=null;for(let i=0;i<s.length;i+=2){const ax=pos[i*3],az=pos[i*3+2];if(last&&Math.hypot(ax-last[0],az-last[1])>3)acc=0;const bx2=pos[i*3+3],bz2=pos[i*3+5];s[i]=acc;acc+=Math.hypot(bx2-ax,bz2-az);s[i+1]=acc;last=[bx2,bz2]}}
   const cl=new THREE.LineSegments(g,CABLE_MAT);PERM.add(cl);
-  chunk(-50,-30,50,-10,0,20,cx=>{pylon(cx,0,0,-24,PAL.amb,()=>{CABLE_MAT.uniforms.uSurge.value=0;AU.zap()},{h:2.4})},80,8)}
+  chunk(-50,-30,50,-10,0,20,cx=>{pylon(cx,-12,0,-26,PAL.amb,()=>{CABLE_MAT.uniforms.uSurge.value=0;AU.zap()},{h:2.4})},80,8)}
 // desert: scattered rocks + distant mesas
 {const r=rng(31),N=420,geo=new THREE.DodecahedronGeometry(1,0),im=new THREE.InstancedMesh(geo,stdMat(0x2a2420,{r:.95,m:0}),N);let n=0;const m4=new THREE.Matrix4();
   for(let k=0;k<N;k++){const a=r()*TAU,R=120+r()*800,x=Math.cos(a)*R,z=Math.sin(a)*R-200;if(Math.abs(x)<300&&z<-30&&z>-610)continue;if(Math.abs(x+305)<40&&Math.abs(z+130)<45)continue;
@@ -742,3 +742,84 @@ const CABLE_MAT=new THREE.ShaderMaterial({uniforms:{uTime:U.time,uSurge:{value:-
   const mm=mb.mesh(stdMat(0xffffff,{vc:true,r:1,m:0}),false);mm.receiveShadow=false;PERM.add(mm);
   for(let k=0;k<3;k++){const x=[60,-140,180][k],z=[-30,-40,70][k],ry=r()*3;EB.box(x,1.2,z,4,2.4,9,0x2a2622,ry);EB.box(x,2.8,z,3.6,1.2,4,0x232833,ry,.2);EB.box(x+1,.5,z,1.4,1,1.4,0x1a1a1a,ry+.4);addBox(x-4,0,z-4,x+4,2.6,z+4)}}
 PERM.add(EB.mesh(M.struct));PERM.add(EN.mesh(M.neonV,false));PERM.add(EG.mesh());PERM.add(EW.mesh(M.window,false));setRainRects();
+
+// ---------- 11 characters: articulated rigs + drones ----------
+const CGm={cap:keep(new THREE.CapsuleGeometry(.5,1,4,12)),sph:keep(new THREE.SphereGeometry(.5,18,12)),
+  visor:keep(new THREE.SphereGeometry(.5,24,10,Math.PI*1.5-1,2,Math.PI/2-.42,.5)),eye:keep(new THREE.SphereGeometry(.5,12,8)),
+  coat:keep(new THREE.CylinderGeometry(.2,.34,.85,12,1,true)),hood:keep(new THREE.SphereGeometry(.5,16,12,0,TAU,0,Math.PI*.62)),
+  torso:keep((()=>{const s=new THREE.Shape();s.moveTo(-.17,0);s.lineTo(.17,0);s.lineTo(.27,.3);s.lineTo(.23,.5);s.lineTo(-.23,.5);s.lineTo(-.27,.3);s.closePath();
+    const g=new THREE.ExtrudeGeometry(s,{depth:.2,bevelEnabled:true,bevelThickness:.04,bevelSize:.03,bevelSegments:2});g.translate(0,0,-.1);g.computeVertexNormals();return g})()),
+  drone:keep(new THREE.IcosahedronGeometry(.42,1)),ring:keep(new THREE.TorusGeometry(.5,.05,6,32)),rotor:keep(new THREE.CylinderGeometry(.26,.26,.02,16)),
+  cone:keep((()=>{const g=new THREE.ConeGeometry(1.4,5,20,1,true);g.translate(0,-2.5,0);g.rotateX(-Math.PI/2.6);return g})())};
+const CM={body:stdMat(0x1a2030,{r:.3,m:.88}),plate:stdMat(0x2b3446,{r:.22,m:.92}),coat:stdMat(0x121318,{r:.8,m:.15,side:THREE.DoubleSide}),coatR:stdMat(0x2a161e,{r:.75,m:.2,side:THREE.DoubleSide}),
+  work:stdMat(0x3a3428,{r:.55,m:.45}),haz:stdMat(0x8a5410,{r:.45,m:.4}),ener:new THREE.MeshBasicMaterial({color:0x4ff2ff,transparent:true,opacity:.32,blending:THREE.AdditiveBlending,depthWrite:false}),
+  rotor:new THREE.MeshBasicMaterial({color:0x8899aa,transparent:true,opacity:.18,depthWrite:false}),scan:new THREE.MeshBasicMaterial({color:0xff3a4a,transparent:true,opacity:.05,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})};
+function part(geo,mat,par,x,y,z,sx,sy,sz){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(sx,sy??sx,sz??sx);m.castShadow=true;par.add(m);return m}
+function piv(par,x,y,z){const g=new THREE.Group();g.position.set(x,y,z);par.add(g);return g}
+// kind: 'player' | 'citizen' | 'worker'
+function rig(kind,acc){const R={kind},root=R.root=new THREE.Group(),nm=neon(acc),body=kind==='worker'?CM.work:CM.body,ener=kind==='player'?CM.ener:null;
+  const hips=R.hips=piv(root,0,.95,0);part(TPL.box,CM.plate,hips,0,0,0,.34,.16,.22);part(TPL.box,nm,hips,0,.02,-.115,.3,.025,.01);
+  const sp=R.spine=piv(hips,0,.07,0);const tor=part(CGm.torso,body,sp,0,0,0,kind==='worker'?1.25:1,1,kind==='worker'?1.3:1);
+  part(TPL.box,CM.plate,sp,0,.3,-.13,.3,.22,.04);part(TPL.box,nm,sp,0,.44,-.155,.28,.02,.01);part(TPL.box,nm,sp,.2,.25,-.13,.015,.3,.012);part(TPL.box,nm,sp,-.2,.25,-.13,.015,.3,.012);
+  if(ener)part(TPL.box,ener,sp,0,.2,-.16,.16,.14,.02);part(TPL.box,CM.body,sp,0,.28,.15,.26,.3,.1);
+  if(kind==='worker'){const tk=part(TPL.cyl,CM.haz,sp,0,.3,.24,.22,.42,.22);part(TPL.box,neon(PAL.amb),sp,0,.52,.24,.1,.02,.1);part(TPL.box,CM.haz,sp,.36,.48,0,.22,.12,.3);part(TPL.box,CM.haz,sp,-.36,.48,0,.22,.12,.3)}
+  const nk=R.neck=piv(sp,0,.52,0);part(TPL.cyl,CM.body,nk,0,.04,0,.1,.1,.1);const hd=R.head=piv(nk,0,.1,0);R.headMeshes=[];
+  if(kind==='citizen'){R.headMeshes.push(part(CGm.sph,CM.body,hd,0,.1,0,.22,.27,.24),part(CGm.hood,CM.coat,hd,0,.08,.02,.31,.34,.32),part(CGm.visor,nm,hd,0,.1,0,.235,.27,.25))}
+  else if(kind==='worker'){R.headMeshes.push(part(TPL.box,CM.work,hd,0,.1,0,.3,.26,.28),part(CGm.eye,nm,hd,0,.12,-.14,.09),part(TPL.box,CM.haz,hd,0,.25,0,.34,.05,.32),part(TPL.box,neon(PAL.amb),hd,0,.255,-.165,.12,.03,.01))}
+  else{R.headMeshes.push(part(CGm.sph,CM.plate,hd,0,.11,0,.25,.29,.27),part(CGm.visor,nm,hd,0,.11,0,.262,.29,.282),part(TPL.box,CM.body,hd,0,.24,.04,.04,.1,.22),
+    part(TPL.box,nm,hd,.13,.11,.02,.02,.04,.12),part(TPL.box,nm,hd,-.13,.11,.02,.02,.04,.12))}
+  const arm=(s)=>{const sh=piv(sp,s*.29,.45,0);part(CGm.sph,CM.plate,sh,0,0,0,kind==='worker'?.2:.16);part(CGm.cap,body,sh,0,-.17,0,.13,.2,.13);if(ener)part(TPL.box,ener,sh,s*.05,-.17,-.02,.02,.2,.08);
+    const el=piv(sh,0,-.33,0);part(CGm.sph,M.chrome,el,0,0,0,.1);part(CGm.cap,body,el,0,-.15,0,.11,.18,.11);part(TPL.box,nm,el,s*.055,-.15,0,.01,.16,.03);if(ener)part(TPL.box,ener,el,0,-.15,-.06,.06,.18,.015);
+    const hn=piv(el,0,-.31,0);part(TPL.box,CM.plate,hn,0,-.04,0,.08,.11,.1);return[sh,el]};
+  [R.sL,R.eL]=arm(-1);[R.sR,R.eR]=arm(1);
+  const leg=(s)=>{const th=piv(hips,s*.12,-.04,0);part(CGm.sph,M.chrome,th,0,0,0,.13);part(CGm.cap,body,th,0,-.22,0,.16,.27,.17);if(ener)part(TPL.box,ener,th,0,-.22,-.085,.08,.22,.015);
+    const kn=piv(th,0,-.45,0);part(CGm.sph,CM.plate,kn,0,0,-.02,.12);part(CGm.cap,body,kn,0,-.21,0,.12,.26,.12);part(TPL.box,nm,kn,0,-.2,-.065,.04,.24,.01);
+    const ft=piv(kn,0,-.43,0);part(TPL.box,CM.plate,ft,0,-.02,-.05,.12,.07,.27);part(TPL.box,nm,ft,0,-.05,-.185,.1,.015,.01);return[th,kn,ft]};
+  [R.tL,R.kL,R.fL]=leg(-1);[R.tR,R.kR,R.fR]=leg(1);
+  if(kind==='citizen'){R.coat=part(CGm.coat,Math.random()<.5?CM.coat:CM.coatR,hips,0,-.36,0,1,1,1);R.coat.castShadow=true}
+  R.ph=Math.random()*9;R.spd=0;R.look=0;R.lookP=0;return R}
+const _r=(o,ax,v,k,dt)=>{o.rotation[ax]=damp(o.rotation[ax],v,k,dt)};
+// procedural animation: idle breathing, stride driven by speed, dash lean, airborne tuck, glitch dance, head tracking
+function animRig(R,dt,t,o){const s=clamp(R.spd/4.5,0,1.7),k=16;R.ph+=dt*(R.spd*2.1+.0001);const sw=Math.sin(R.ph),a=.62*Math.min(s,1.15);
+  let tL=sw*a,tR=-sw*a,kL=-Math.max(0,Math.sin(R.ph+1.3))*a*1.6,kR=-Math.max(0,Math.sin(R.ph+1.3+Math.PI))*a*1.6,aL=-sw*a*.75,aR=sw*a*.75,eL=.25+s*.35,eR=.25+s*.35;
+  let lean=-.05*s,hipY=.95+Math.abs(Math.cos(R.ph))*.045*s-.025*s,twist=sw*.13*s,br=Math.sin(t*1.7)*(1-Math.min(s,1)),hx=0,hz=0,hipZ=0,spZ=0;
+  if(o.scan){aL=-.85;aR=-.75;eL=1.3+Math.sin(t*9)*.08;eR=1.2+Math.sin(t*8+1)*.08}
+  if(o.dash){lean=-.62;hipY-=.07;aL=aR=.8;eL=eR=.4;tL*=1.25;tR*=1.25}
+  if(o.air){tL=-.55;tR=-.2;kL=-1.1;kR=-.6;aL=aR=-.35;eL=eR=.9}
+  if(o.dance){const b=t*2.1,q=Math.floor(b*2)/2,f=Math.sin(q*Math.PI),g=(Math.floor(b)%2)?1:-1;
+    aL=-2.6+f*.4;aR=-.4-f*1.2*g;eL=.9+Math.sin(q*3)*.8;eR=1.4;tL=.15*g;tR=-.15*g;kL=-.35-.3*Math.abs(f);kR=-.35;hipY=.88+.06*Math.abs(f);twist=.5*g;hx=.3*Math.sin(q*5);hz=.25*g;hipZ=.12*g;spZ=-.2*g;
+    if(Math.random()<.04){twist+=(Math.random()-.5)*1.4}}
+  _r(R.tL,'x',tL,k,dt);_r(R.tR,'x',tR,k,dt);_r(R.kL,'x',kL,k,dt);_r(R.kR,'x',kR,k,dt);_r(R.fL,'x',-tL*.3-kL*.4,k,dt);_r(R.fR,'x',-tR*.3-kR*.4,k,dt);
+  _r(R.sL,'x',aL,k,dt);_r(R.sR,'x',aR,k,dt);_r(R.eL,'x',eL,k,dt);_r(R.eR,'x',eR,k,dt);_r(R.sL,'z',-.08-br*.02,k,dt);_r(R.sR,'z',.08+br*.02,k,dt);
+  R.hips.position.y=damp(R.hips.position.y,hipY+br*.008,k,dt);_r(R.hips,'z',hipZ,k,dt);_r(R.spine,'x',lean+br*.025,10,dt);_r(R.spine,'y',twist,10,dt);_r(R.spine,'z',spZ,10,dt);
+  _r(R.neck,'y',clamp(R.look-twist,-1.1,1.1)+hz,8,dt);_r(R.head,'x',R.lookP+Math.sin(t*1.7+1)*.025*(1-Math.min(s,1))+hx-lean*.6,8,dt);
+  if(R.coat){R.coat.rotation.x=damp(R.coat.rotation.x,(tL+tR)*.15-lean*.4+s*.12,6,dt);R.coat.scale.x=1+Math.abs(sw)*.06*s}}
+function drone(acc){const g=new THREE.Group(),b=piv(g,0,0,0);part(CGm.drone,CM.plate,b,0,0,0,1,.8,1);const rg=part(CGm.ring,M.chrome,b,0,0,0,1);rg.rotation.x=Math.PI/2;
+  const hd=piv(b,0,0,0);part(TPL.box,CM.body,hd,0,0,-.33,.34,.2,.14);const eye=part(CGm.eye,neon(acc),hd,0,0,-.41,.13,.13,.06);const es=glowSprite(acc,.8,.8);es.position.set(0,0,-.47);hd.add(es);
+  const sc=new THREE.Mesh(CGm.cone,CM.scan);sc.position.z=-.45;hd.add(sc);const rot=[];
+  for(let k=0;k<4;k++){const a=k*Math.PI/2+Math.PI/4,x=Math.cos(a)*.62,z=Math.sin(a)*.62;part(TPL.box,CM.body,b,x/2,.05,z/2,.08,.05,.62).rotation.y=-a+Math.PI/2;part(TPL.cyl,CM.plate,b,x,.05,z,.14,.12,.14);
+    const r=part(CGm.rotor,CM.rotor,b,x,.13,z,1);r.castShadow=false;rot.push(r);part(TPL.box,neon(acc),b,x,0,z,.05,.03,.05)}
+  part(TPL.cyl,M.chrome,b,0,.42,0,.03,.3,.03);return{root:g,body:b,head:hd,ring:rg,rot,sc,drone:true,look:0,lookP:0}}
+// NPC manager: whole NPCs are added/removed from the scene by 50 m sector, so far ones cost nothing
+const NPCS=[];const SEC=50;
+function spawnNPCs(){const r=rng(99);for(const sp of NSP){const acc=sp.k==='drone'?(r()<.6?PAL.red:PAL.cyan):sp.k==='worker'?PAL.amb:[PAL.mag,PAL.cyan,PAL.amb][Math.floor(r()*3)];
+  const R=sp.k==='drone'?drone(acc):rig(sp.k,acc);const p0=sp.path[0];R.root.position.set(p0[0],p0[1],p0[2]);
+  const n={R,sp,i:0,dir:1,wait:r()*2,yaw:r()*TAU,in:false,ph:r()*9,hy:p0[1],base:V3(p0[0],p0[1],p0[2])};
+  if(sp.look)n.yaw=Math.atan2(-(sp.look[0]-p0[0]),-(sp.look[1]-p0[2]));NPCS.push(n)}}
+let npcT=0;
+function npcUpdate(dt,t){npcT-=dt;if(npcT<=0){npcT=.4;const sx=Math.floor(P.pos.x/SEC),sz=Math.floor(P.pos.z/SEC);
+    for(const n of NPCS){const p=n.R.root.position,on=Math.abs(Math.floor(p.x/SEC)-sx)<=1&&Math.abs(Math.floor(p.z/SEC)-sz)<=1&&Math.abs(p.y-P.pos.y)<24;
+      if(on!==n.in){n.in=on;on?scene.add(n.R.root):scene.remove(n.R.root)}}}
+  for(const n of NPCS){if(!n.in)continue;const R=n.R,p=R.root.position,sp=n.sp,dr=!!R.drone;let moving=0;
+    const dx=P.pos.x-p.x,dz=P.pos.z-p.z,dpl=Math.hypot(dx,dz),pYaw=Math.atan2(-dx,-dz);
+    if(sp.b==='patrol'&&!S.dance&&!(dpl<3.2&&!dr)){if(n.wait>0)n.wait-=dt;else{const tg=sp.path[n.i],tx=tg[0]-p.x,tz=tg[2]-p.z,d=Math.hypot(tx,tz);
+        if(d<.4){n.i+=n.dir;if(n.i>=sp.path.length||n.i<0){if(sp.path.length>3)n.i=0;else{n.dir*=-1;n.i+=2*n.dir}}n.wait=dr?.3:1+Math.random()*2.5}
+        else{const v=dr?3.2:1.35;p.x+=tx/d*v*dt;p.z+=tz/d*v*dt;n.hy=damp(n.hy,tg[1],1,dt);let dy=Math.atan2(-tx,-tz)-n.yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));n.yaw+=dy*Math.min(1,dt*4);moving=v}}}
+    if(sp.b==='watch'&&dpl<9){let dy=pYaw-n.yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));n.yaw+=dy*Math.min(1,dt*1.5)}
+    R.root.rotation.y=n.yaw;let ly=0,lp=0;
+    if(dpl<8){ly=Math.atan2(Math.sin(pYaw-n.yaw),Math.cos(pYaw-n.yaw));lp=-Math.atan2(P.pos.y+1.5-(p.y+1.6),dpl)*.6}else if(sp.b==='scan'){ly=Math.sin(t*.7+n.ph)*.6;lp=.25+Math.sin(t*1.3+n.ph)*.1}
+    R.look=damp(R.look,clamp(ly,-1.2,1.2),5,dt);R.lookP=damp(R.lookP,lp,5,dt);
+    if(dr){const bob=Math.sin(t*2+n.ph)*.15;p.y=n.hy+(S.dance?Math.abs(Math.sin(t*4.2))*.8:bob);R.body.rotation.z=damp(R.body.rotation.z,S.dance?Math.sin(t*4.2)*.6:0,6,dt);R.body.rotation.x=damp(R.body.rotation.x,moving?-.25:0,4,dt);
+      R.ring.rotation.z+=dt*(S.dance?12:1.5);R.rot.forEach(r=>r.rotation.y+=dt*40);R.head.rotation.y=R.look;R.head.rotation.x=R.lookP+(S.dance?Math.sin(t*8.4)*.4:0);R.sc.material=CM.scan;if(S.dance)R.root.rotation.y+=Math.sin(t*2.1)*1.2}
+    else{p.y=n.hy;R.spd=damp(R.spd,moving,6,dt);animRig(R,dt,t+n.ph,{scan:sp.b==='scan'&&!S.dance,dance:S.dance})}
+    if(dpl<.75&&Math.abs(P.pos.y-p.y)<1.6&&!dr){const k=(.75-dpl)/(dpl||1);P.pos.x+=dx*k;P.pos.z+=dz*k}}}
