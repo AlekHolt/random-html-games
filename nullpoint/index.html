@@ -399,8 +399,94 @@ function core(cx,x,y,z,id){const g=new THREE.Group();g.position.set(x,y,z);cx.ad
   const sp=glowSprite(col,5,.55,true);hub.add(sp);const ln=cx.light(x,y+2.6,z,col,2.4,22);
   const st={t:S.cores[id]?1:0,on:!!S.cores[id]},wp=V3(x,y+2,z);
   cx.up(dt=>{const T=U.time.value;if(st.on)st.t=Math.min(1,st.t+dt/2.4);const k=st.t*st.t*(3-2*st.t),sp2=st.on?(1-k)*9+1.2:.35;
-    shells.forEach((s,i)=>{s.rotation.y+=dt*sp2;s.children[0].position.set(Math.cos(.45)*k*1.6,0,-Math.sin(.45)*k*1.6);s.children[0].rotation.z=k*.5});
+    shells.forEach((s,i)=>{s.rotation.y+=dt*sp2;s.children[0].position.set(-Math.cos(.45)*k*1.6,0,Math.sin(.45)*k*1.6);s.children[0].rotation.z=k*.5});
     sph.scale.setScalar(1+k*2+Math.sin(T*3)*.04);lat.scale.setScalar(1+k*2.4);lat.rotation.y+=dt*(.4+k);lat.rotation.x+=dt*.25;cm.uniforms.uInt.value=1.4+k*4.5+Math.sin(T*5)*.15*(1+k);
     tor1.rotation.set(T*.7*(1+k*6),T*.3,0);tor2.rotation.set(0,T*.5,T*.9*(1+k*6));tor1.scale.setScalar(1+k*.9);tor2.scale.setScalar(1+k*1.2);
     hub.position.y=2.6+Math.sin(T*1.3)*.12+k*.8;sp.scale.setScalar(5+k*9);sp.material.opacity=.5+k*.4;ln.mul=1+k*2.5});
   cx.int({p:wp,r:3.6,fn:()=>{if(st.on)return;st.on=true;S.cores[id]=1;AU.coreOn(id);coreActivated(id)}})}
+
+// ---------- 9 monolith: 10x10 grid of 50 m bays, two ring floors, atrium, cathedral tier, spire ----------
+const MZ=-320,BAY=50,MX0=-250,MZ0=-570,H1=16,H2=32,T2=112,SPT=262;
+const isAtr=(i,j)=>i>=3&&i<=6&&j>=3&&j<=6,isLob=(i,j)=>(i===4||i===5)&&j>=7,inGrid=(i,j)=>i>=0&&i<10&&j>=0&&j<10;
+const STAIR0=new Set(['1,8','8,8','1,1','8,1']),STAIR1=new Set(['0,5','9,4']);
+const bx=i=>MX0+i*BAY,bz=j=>MZ0+j*BAY;
+const BT={};{const r=rng(77),pool=['servers','reactor','assembly','consoles','storage','quarters','lab','hall','servers','consoles','assembly'];
+  for(let L=0;L<2;L++)for(let i=0;i<10;i++)for(let j=0;j<10;j++)if(!isAtr(i,j))BT[L+','+i+','+j]=pool[Math.floor(r()*pool.length)];
+  for(let j=7;j<10;j++){BT['0,4,'+j]=BT['0,5,'+j]='lobby'}BT['0,0,0']='vault'}
+const SB=new Batch(),FB=new Batch(),WN=new Batch(),NB=new Batch(),GL=new Glow();
+const CS=0x262c38,CI=0x1d222c,CF=0x15181f;
+function wall(b,ax,c0,c1,k,y0,y1,t,gaps,col){let s=c0;
+  const seg=(a,e,ya,yb)=>{if(e-a<.01||yb-ya<.01)return;ax==='x'?solid(b,a,ya,k-t/2,e,yb,k+t/2,col):solid(b,k-t/2,ya,a,k+t/2,yb,e,col)};
+  for(const[gc,gw,gh]of gaps.slice().sort((p,q)=>p[0]-q[0])){seg(s,gc-gw/2,y0,y1);seg(gc-gw/2,gc+gw/2,y0+gh,y1);s=gc+gw/2}seg(s,c1,y0,y1)}
+function slab(b,x0,z0,x1,z1,y0,y1,h,col){if(!h)return solid(b,x0,y0,z0,x1,y1,z1,col);const[a,c,e,d]=h;
+  solid(b,x0,y0,z0,x1,y1,c,col);solid(b,x0,y0,d,x1,y1,z1,col);solid(b,x0,y0,c,a,y1,d,col);solid(b,e,y0,c,x1,y1,d,col)}
+function stairs(b,x0,z0,z1,y0){for(let k=0;k<32;k++){const x=x0+k*.8;solid(b,x,y0,z0,x+.8,y0+(k+1)*.5,z1,k%2?0x2a303c:0x232833);NB.box(x+.05,y0+(k+1)*.5+.01,(z0+z1)/2,.06,.03,z1-z0-.4,PAL.amb)}}
+function stairHole(i,j){const x0=bx(i),z1=bz(j)+BAY;return[x0+3,z1-6.5,x0+28.6,z1-.5]}
+function rail(b,x0,z0,x1,z1,y){solid(b,x0,y,z0,x1,y+1.1,z1,0x30384a);NB.bb(x0,y+1.1,z0,x1,y+1.16,z1,PAL.cyan)}
+(function monolith(){
+  // floors
+  solid(SB,-250,-.2,-570,250,.02,-70,CF);
+  for(let i=0;i<10;i++)for(let j=0;j<10;j++){if(isAtr(i,j))continue;const x0=bx(i),z0=bz(j),k=i+','+j;
+    slab(SB,x0,z0,x0+BAY,z0+BAY,H1-.6,H1,STAIR0.has(k)&&stairHole(i,j),CS);slab(FB,x0,z0,x0+BAY,z0+BAY,H2-1,H2,STAIR1.has(k)&&stairHole(i,j),0x1b1f28);
+    if(STAIR0.has(k)){const h=stairHole(i,j);stairs(SB,h[0],h[1],h[3],0);rail(SB,h[0],h[1]-.2,h[2],h[1],H1);rail(SB,h[0]-.2,h[1],h[0],h[3],H1)}
+    if(STAIR1.has(k)){const h=stairHole(i,j);stairs(SB,h[0],h[1],h[3],H1);rail(SB,h[0],h[1]-.2,h[2],h[1],H2);rail(SB,h[0]-.2,h[1],h[0],h[3],H2);
+      wall(FB,'x',h[0]-.5,h[2]+1,h[1]-.5,H2,H2+4,.5,[],CI);wall(FB,'x',h[0]-.5,h[2]+1,h[3]+.5,H2,H2+4,.5,[],CI);wall(FB,'z',h[1]-.5,h[3]+.5,h[0]-.5,H2,H2+4,.5,[],CI);
+      wall(FB,'z',h[1]-.5,h[3]+.5,h[2]+1,H2,H2+4,.5,[[(h[1]+h[3])/2,3.6,3.4]],CI);solid(FB,h[0]-1,H2+4,h[1]-1,h[2]+1.5,H2+4.4,h[3]+1,0x1b1f28);
+      NB.box(h[2]+1.3,H2+3.6,(h[1]+h[3])/2,.08,.08,3.6,PAL.amb);RAINR.push([h[0]-1,h[1]-1,h[2]+1.5,h[3]+1,H2+4.5])}}
+  // atrium balconies at L1
+  for(let a=3;a<=6;a++){const c=bx(a)+25;solid(SB,c-10,H1-.6,-420,c+10,H1,-417,CS);solid(SB,c-10,H1-.6,-223,c+10,H1,-220,CS);
+    const cz=bz(a)+25;solid(SB,-100,H1-.6,cz-10,-97,H1,cz+10,CS);solid(SB,97,H1-.6,cz-10,100,H1,cz+10,CS)}
+  // internal walls (doors sit 70% along each edge; atrium edges get big openings)
+  const r=rng(5);
+  for(let i=0;i<10;i++)for(let j=0;j<10;j++){for(const[di,dj]of[[1,0],[0,1]]){const ni=i+di,nj=j+dj;if(!inGrid(ni,nj))continue;
+    const A=isAtr(i,j),B=isAtr(ni,nj);if(A&&B)continue;if(isLob(i,j)&&isLob(ni,nj))continue;
+    const ax=di?'z':'x',k=di?bx(ni):bz(nj),c0=di?bz(j):bx(i),c1=c0+BAY;
+    if(A||B){const lob=isLob(i,j)||isLob(ni,nj);wall(SB,ax,c0,c1,k,0,H1,1,[[c0+25,lob?32:20,lob?14:10]],CI);wall(FB,ax,c0,c1,k,H1,H2,1,[[c0+25,20,9]],CI)}
+    else{wall(SB,ax,c0,c1,k,0,H1,1,[[c0+35,5,5]],CI);wall(SB,ax,c0,c1,k,H1,H2,1,[[c0+35,5,5]],CI)}}}
+  // facade
+  for(let s=0;s<4;s++)for(let n=0;n<10;n++){const ax=s<2?'x':'z',k=[-570,-70,-250,250][s],c0=ax==='x'?bx(n):bz(n);
+    const lobby=s===1&&(n===4||n===5),dr=!lobby&&(n+s)%2===0;
+    wall(FB,ax,c0,c0+BAY,k,0,H1,1.2,lobby?[[n===4?c0+BAY-4:c0+4,8,14]]:dr?[[c0+35,5,5]]:[],CS);wall(FB,ax,c0,c0+BAY,k,H1,H2+1.4,1.2,[],CS);
+    const o=(s===0||s===2)?-1:1;
+    for(let w=0;w<6;w++){const c=c0+4+w*8.3;for(const y of[5.5,10.5,21,26.5]){if(y<12&&(dr&&Math.abs(c+2.5-(c0+35))<6||lobby))continue;
+      const col=(w+n+s+(y>15?1:0))%5===0?PAL.amb:(w*3+n)%7===0?PAL.mag:0x7fd8ff;
+      ax==='x'?WN.quad(c+2.5,y,k+o*.62,6,3.4,col,o>0?0:Math.PI):WN.quad(k+o*.62,y,c+2.5,6,3.4,col,o*Math.PI/2)}}}
+  // facade ribs, ledges and neon trims
+  for(let s=0;s<4;s++){const ax=s<2?'x':'z',k=[-570,-70,-250,250][s],o=(s===0||s===2)?-1:1;
+    for(let c=-250;c<=250;c+=25){const cc=ax==='x'?c:c-320;if(ax==='x')FB.bb(c-1,0,k+o*.6-(o<0?1.6:0),c+1,H2+3,k+o*.6+(o>0?1.6:0),0x2c3342);else FB.bb(k+o*.6-(o<0?1.6:0),0,cc-1,k+o*.6+(o>0?1.6:0),H2+3,cc+1,0x2c3342)}
+    for(const y of[H1,H2+1.4]){if(ax==='x'){FB.bb(-252,y-.4,k+o*.6-(o<0?1:0),252,y+.4,k+o*.6+(o>0?1:0),0x30384a);tube(NB,GL,-250,y-.6,k+o*1.7,250,y-.6,k+o*1.7,.09,y>20?PAL.mag:PAL.cyan,.9)}
+      else{FB.bb(k+o*.6-(o<0?1:0),y-.4,-572,k+o*.6+(o>0?1:0),y+.4,-68);tube(NB,GL,k+o*1.7,y-.6,-570,k+o*1.7,y-.6,-70,.09,y>20?PAL.mag:PAL.cyan,.9)}}}
+  // roof parapet + atrium railing on the cathedral floor (gap by the north-east lift)
+  rail(FB,-250,-570,250,-569.5,H2);rail(FB,-250,-70.5,250,-70,H2);rail(FB,-250,-570,-249.5,-70,H2);rail(FB,249.5,-570,250,-70,H2);
+  rail(FB,-100,-420,100,-419.6,H2);rail(FB,-100,-220.4,100,-220,H2);rail(FB,-100,-420,-99.6,-220,H2);rail(FB,99.6,-420,100,-220,H2);
+  // cathedral tier walls with a door each side, roof with skylight lattice, spire
+  for(let s=0;s<4;s++){const ax=s<2?'x':'z',k=[MZ-150,MZ+150,-150,150][s],c0=ax==='x'?-150:MZ-150;wall(FB,ax,c0,c0+300,k,H2,T2,1.6,[[c0+150,6,7]],CS);
+    const o=(s===0||s===2)?-1:1;for(let c=c0+10;c<c0+300;c+=7.5)for(let y=H2+12;y<T2-4;y+=9){if((c*7+y)%5<1.2)continue;const col=(c+y)%11<1.5?PAL.mag:0x7fd8ff;
+      ax==='x'?WN.quad(c,y,k+o*.82,3.2,5,col,o>0?0:Math.PI):WN.quad(k+o*.82,y,c,3.2,5,col,o*Math.PI/2)}
+    for(let c=c0;c<=c0+300;c+=30)ax==='x'?FB.bb(c-1.2,H2,k-(o<0?2.6:0)+o*.8,c+1.2,T2+2,k+(o>0?2.6:0)+o*.8,0x2c3342):FB.bb(k-(o<0?2.6:0)+o*.8,H2,c-1.2,k+(o>0?2.6:0)+o*.8,T2+2,c+1.2,0x2c3342)}
+  slab(FB,-152,MZ-152,152,MZ+152,T2,T2+2,[-100,MZ-100,100,MZ+100],0x1b1f28);solid(FB,-100,T2+1.2,MZ-100,100,T2+1.6,MZ+100,0x0d1016);
+  for(let c=-100;c<=100;c+=20){FB.bb(c-.6,T2-1.2,MZ-100,c+.6,T2+1.2,MZ+100,0x232a38);FB.bb(-100,T2-1.2,MZ+c-.6,100,T2+1.2,MZ+c+.6,0x232a38);
+    tube(NB,GL,c,T2-1.4,MZ-100,c,T2-1.4,MZ+100,.07,PAL.cyan,.7)}
+  for(let e=0;e<4;e++){const a=e*Math.PI/2;tube(NB,GL,-150,T2+2.2,MZ-150+(e%2)*300,150,T2+2.2,MZ-150+(e%2)*300,.12,PAL.mag,1.4);tube(NB,GL,-150+(e%2)*300,T2+2.2,MZ-150,-150+(e%2)*300,T2+2.2,MZ+150,.12,PAL.mag,1.4)}
+  solid(FB,-50,T2,MZ-50,50,SPT,MZ+50,0x1c2029);
+  for(let c=-50;c<=50;c+=10)for(const s of[-1,1]){FB.bb(c-.8,T2,MZ+s*50-.6+s*.6,c+.8,SPT+4,MZ+s*50+.6+s*.6,0x2c3342);FB.bb(s*50-.6+s*.6,T2,MZ+c-.8,s*50+.6+s*.6,SPT+4,MZ+c+.8,0x2c3342)}
+  for(let y=T2+8;y<SPT;y+=6)for(let c=-45;c<=45;c+=10){if((c+y*3)%7<2)continue;const col=(y+c)%13<2?PAL.org:0x7fd8ff;WN.quad(c+5,y,MZ+51.3,4,3,col,0);WN.quad(c+5,y,MZ-51.3,4,3,col,Math.PI);WN.quad(51.3,y,MZ+c+5,4,3,col,Math.PI/2);WN.quad(-51.3,y,MZ+c+5,4,3,col,-Math.PI/2)}
+  for(const[sx,sz]of[[-1,-1],[1,-1],[-1,1],[1,1]]){tube(NB,GL,sx*51.6,T2,MZ+sz*51.6,sx*51.6,SPT+4,MZ+sz*51.6,.25,PAL.cyan,3);tube(NB,GL,sx*151.8,H2,MZ+sz*151.8,sx*151.8,T2+2,MZ+sz*151.8,.2,PAL.cyan,2.4)}
+  FB.cyl(0,SPT+10,MZ,20,12,0x1c2029);FB.cyl(0,SPT+30,MZ,3,40,0x2a3140);tube(NB,GL,0,SPT+16.5,MZ-21,0,SPT+16.5,MZ+21,.01,PAL.mag,.1);
+  for(let a=0;a<24;a++){const t0=a/24*TAU,t1=(a+1)/24*TAU;tube(NB,GL,Math.cos(t0)*20.4,SPT+16.4,MZ+Math.sin(t0)*20.4,Math.cos(t1)*20.4,SPT+16.4,MZ+Math.sin(t1)*20.4,.22,PAL.mag,2.6);
+    tube(NB,GL,Math.cos(t0)*20.4,SPT+4.4,MZ+Math.sin(t0)*20.4,Math.cos(t1)*20.4,SPT+4.4,MZ+Math.sin(t1)*20.4,.15,PAL.cyan,1.8)}
+  // giant pipes crossing the cathedral void (hidden terminal rides on the first)
+  for(const pz of[MZ+40,MZ-30]){SB.cyl(0,88,pz,3,300,0x2f3646,0,Math.PI/2);for(let x=-140;x<=140;x+=14)SB.cyl(x,88,pz,3.3,1.2,0x1e232d,0,Math.PI/2);addBox(-150,85,pz-3,150,91,pz+3);
+    tube(NB,GL,-150,91.05,pz,150,91.05,pz,.06,PAL.org,.5)}
+  // core-C platform hung in the atrium, with a hole for the lift
+  slab(SB,-8,MZ-8,8,MZ+8,59.4,60,[-2.6,MZ-2.6,2.6,MZ+2.6],0x2a3140);
+  for(const[a,b,c,d]of[[-8,MZ-8,8,MZ-7.8],[-8,MZ+7.8,8,MZ+8],[-8,MZ-8,-7.8,MZ+8],[7.8,MZ-8,8,MZ+8]])rail(SB,a,b,c,d,60);
+  for(const[sx,sz]of[[-1,-1],[1,-1],[-1,1],[1,1]]){SB.cyl(sx*7.6,86,MZ+sz*7.6,.12,52,0x50586a);tube(NB,GL,sx*8.05,59.7,MZ-8.05*sz,sx*8.05,59.7,MZ+8.05*sz,.05,PAL.org,.5)}
+  RAINR.push([-250,-570,250,-70,H2+.2],[-151,MZ-151,151,MZ+151,T2+2.5],[-52,MZ-52,52,MZ+52,SPT+40]);
+  const fm=FB.mesh(M.shell),sm=SB.mesh(M.struct);PERM.add(fm);PERM.add(sm);sm.userData.interior=true;window.__monoInterior=sm;
+  const wm=WN.mesh(M.window,false),nm=NB.mesh(M.neonV,false);PERM.add(wm);PERM.add(nm);PERM.add(GL.mesh());
+  const bb=new THREE.Mesh(TPL.quad,screenMat(PAL.mag,0,3.3));bb.position.set(0,82,MZ+152.1);bb.scale.set(70,30,1);PERM.add(bb);
+  const bb2=new THREE.Mesh(TPL.quad,screenMat(PAL.cyan,2,8.1));bb2.position.set(-152.1,70,MZ);bb2.rotation.y=-Math.PI/2;bb2.scale.set(50,22,1);PERM.add(bb2);
+  for(const[sx,sz]of[[-1,-1],[1,-1],[-1,1],[1,1]]){const w=glowSprite(PAL.red,6,.9,true);w.position.set(sx*20,SPT+50,MZ+sz*20);w.userData.blink=1;PERM.add(w)}
+  const top=glowSprite(PAL.red,10,.9,true);top.position.set(0,SPT+51,MZ);top.userData.blink=1;PERM.add(top);
+})();
