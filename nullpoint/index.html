@@ -783,11 +783,11 @@ const _r=(o,ax,v,k,dt)=>{o.rotation[ax]=damp(o.rotation[ax],v,k,dt)};
 function animRig(R,dt,t,o){const s=clamp(R.spd/4.5,0,1.7),k=16;R.ph+=dt*(R.spd*2.1+.0001);const sw=Math.sin(R.ph),a=.62*Math.min(s,1.15);
   let tL=sw*a,tR=-sw*a,kL=-Math.max(0,Math.sin(R.ph+1.3))*a*1.6,kR=-Math.max(0,Math.sin(R.ph+1.3+Math.PI))*a*1.6,aL=-sw*a*.75,aR=sw*a*.75,eL=.25+s*.35,eR=.25+s*.35;
   let lean=-.05*s,hipY=.95+Math.abs(Math.cos(R.ph))*.045*s-.025*s,twist=sw*.13*s,br=Math.sin(t*1.7)*(1-Math.min(s,1)),hx=0,hz=0,hipZ=0,spZ=0;
-  if(o.scan){aL=-.85;aR=-.75;eL=1.3+Math.sin(t*9)*.08;eR=1.2+Math.sin(t*8+1)*.08}
-  if(o.dash){lean=-.62;hipY-=.07;aL=aR=.8;eL=eR=.4;tL*=1.25;tR*=1.25}
+  if(o.scan){aL=.55;aR=.5;eL=1.3+Math.sin(t*9)*.08;eR=1.2+Math.sin(t*8+1)*.08}
+  if(o.dash){lean=-.62;hipY-=.07;aL=aR=-.9;eL=eR=.4;tL*=1.25;tR*=1.25}
   if(o.air){tL=-.55;tR=-.2;kL=-1.1;kR=-.6;aL=aR=-.35;eL=eR=.9}
   if(o.dance){const b=t*2.1,q=Math.floor(b*2)/2,f=Math.sin(q*Math.PI),g=(Math.floor(b)%2)?1:-1;
-    aL=-2.6+f*.4;aR=-.4-f*1.2*g;eL=.9+Math.sin(q*3)*.8;eR=1.4;tL=.15*g;tR=-.15*g;kL=-.35-.3*Math.abs(f);kR=-.35;hipY=.88+.06*Math.abs(f);twist=.5*g;hx=.3*Math.sin(q*5);hz=.25*g;hipZ=.12*g;spZ=-.2*g;
+    aL=2.6-f*.4;aR=.4+f*1.2*g;eL=.9+Math.sin(q*3)*.8;eR=1.4;tL=.15*g;tR=-.15*g;kL=-.35-.3*Math.abs(f);kR=-.35;hipY=.88+.06*Math.abs(f);twist=.5*g;hx=.3*Math.sin(q*5);hz=.25*g;hipZ=.12*g;spZ=-.2*g;
     if(Math.random()<.04){twist+=(Math.random()-.5)*1.4}}
   _r(R.tL,'x',tL,k,dt);_r(R.tR,'x',tR,k,dt);_r(R.kL,'x',kL,k,dt);_r(R.kR,'x',kR,k,dt);_r(R.fL,'x',-tL*.3-kL*.4,k,dt);_r(R.fR,'x',-tR*.3-kR*.4,k,dt);
   _r(R.sL,'x',aL,k,dt);_r(R.sR,'x',aR,k,dt);_r(R.eL,'x',eL,k,dt);_r(R.eR,'x',eR,k,dt);_r(R.sL,'z',-.08-br*.02,k,dt);_r(R.sR,'z',.08+br*.02,k,dt);
@@ -817,9 +817,74 @@ function npcUpdate(dt,t){npcT-=dt;if(npcT<=0){npcT=.4;const sx=Math.floor(P.pos.
         else{const v=dr?3.2:1.35;p.x+=tx/d*v*dt;p.z+=tz/d*v*dt;n.hy=damp(n.hy,tg[1],1,dt);let dy=Math.atan2(-tx,-tz)-n.yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));n.yaw+=dy*Math.min(1,dt*4);moving=v}}}
     if(sp.b==='watch'&&dpl<9){let dy=pYaw-n.yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));n.yaw+=dy*Math.min(1,dt*1.5)}
     R.root.rotation.y=n.yaw;let ly=0,lp=0;
-    if(dpl<8){ly=Math.atan2(Math.sin(pYaw-n.yaw),Math.cos(pYaw-n.yaw));lp=-Math.atan2(P.pos.y+1.5-(p.y+1.6),dpl)*.6}else if(sp.b==='scan'){ly=Math.sin(t*.7+n.ph)*.6;lp=.25+Math.sin(t*1.3+n.ph)*.1}
+    if(dpl<8){ly=Math.atan2(Math.sin(pYaw-n.yaw),Math.cos(pYaw-n.yaw));lp=Math.atan2(P.pos.y+1.5-(p.y+1.6),dpl)*.6}else if(sp.b==='scan'){ly=Math.sin(t*.7+n.ph)*.6;lp=-.15+Math.sin(t*1.3+n.ph)*.1}
     R.look=damp(R.look,clamp(ly,-1.2,1.2),5,dt);R.lookP=damp(R.lookP,lp,5,dt);
     if(dr){const bob=Math.sin(t*2+n.ph)*.15;p.y=n.hy+(S.dance?Math.abs(Math.sin(t*4.2))*.8:bob);R.body.rotation.z=damp(R.body.rotation.z,S.dance?Math.sin(t*4.2)*.6:0,6,dt);R.body.rotation.x=damp(R.body.rotation.x,moving?-.25:0,4,dt);
       R.ring.rotation.z+=dt*(S.dance?12:1.5);R.rot.forEach(r=>r.rotation.y+=dt*40);R.head.rotation.y=R.look;R.head.rotation.x=R.lookP+(S.dance?Math.sin(t*8.4)*.4:0);R.sc.material=CM.scan;if(S.dance)R.root.rotation.y+=Math.sin(t*2.1)*1.2}
     else{p.y=n.hy;R.spd=damp(R.spd,moving,6,dt);animRig(R,dt,t+n.ph,{scan:sp.b==='scan'&&!S.dance,dance:S.dance})}
     if(dpl<.75&&Math.abs(P.pos.y-p.y)<1.6&&!dr){const k=(.75-dpl)/(dpl||1);P.pos.x+=dx*k;P.pos.z+=dz*k}}}
+
+// ---------- 12 player, camera, input ----------
+const P={pos:V3(0,0,0),vel:V3(),yaw:0,pitch:-.04,ground:true,dash:false,up:1,roll:0,fp:false,step:0,jumpHeld:false,face:0,inside:false,chest:V3(),R:rig('player',PAL.cyan),dist:4.6,fov:70};
+scene.add(P.R.root);P.R.root.rotation.order='YXZ';
+const PR=.34,PH=1.76;
+const TRAILMAT=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+const TRAIL={n:12,i:0,t:0,age:new Float32Array(12).fill(9),list:[],on:false};
+P.R.root.updateMatrixWorld(true);P.R.root.traverse(o=>{if(o.isMesh&&o.material!==CM.ener){const im=new THREE.InstancedMesh(o.geometry,TRAILMAT,TRAIL.n);
+  for(let k=0;k<TRAIL.n;k++){im.setMatrixAt(k,o.matrixWorld);im.setColorAt(k,_c.set(0))}im.frustumCulled=false;im.renderOrder=3;im.visible=false;scene.add(im);TRAIL.list.push({src:o,im})}});
+const TC=[new THREE.Color(PAL.cyan),new THREE.Color(PAL.mag)];
+function trailUpdate(dt){TRAIL.t-=dt;if(P.dash&&TRAIL.t<=0){TRAIL.t=.04;const k=TRAIL.i++%TRAIL.n;TRAIL.age[k]=0;for(const e of TRAIL.list){e.im.setMatrixAt(k,e.src.matrixWorld);e.im.instanceMatrix.needsUpdate=true}}
+  let any=false;for(let k=0;k<TRAIL.n;k++){TRAIL.age[k]+=dt;if(TRAIL.age[k]<.5)any=true}
+  for(const e of TRAIL.list){e.im.visible=any;if(!any)continue;for(let k=0;k<TRAIL.n;k++){const f=Math.max(0,1-TRAIL.age[k]/.5);e.im.setColorAt(k,_c.copy(TC[k%2]).multiplyScalar(f*f*.55))}e.im.instanceColor.needsUpdate=true}}
+const K={};let started=false,locked=false;
+addEventListener('keydown',e=>{if(!started)return;K[e.code]=true;if(e.code==='Space'||e.code.startsWith('Arrow'))e.preventDefault();if(e.repeat)return;
+  if(e.code==='KeyV')P.fp=!P.fp;if(e.code==='KeyE')interact();if(e.code==='ShiftLeft'||e.code==='ShiftRight')AU.whoosh()});
+addEventListener('keyup',e=>{K[e.code]=false});addEventListener('blur',()=>{for(const k in K)K[k]=false});
+addEventListener('mousemove',e=>{if(!locked)return;P.yaw-=e.movementX*.0022*(P.up<0?-1:1);P.pitch=clamp(P.pitch-e.movementY*.0022,-1.35,1.35)});
+const inFlip=p=>{for(const z of FLIPZ)if(p.x>z.x0&&p.x<z.x1&&p.z>z.z0&&p.z<z.z1&&p.y>z.y0-.3&&p.y<z.y1+.3)return true;return false};
+function bodyY(){return P.up>0?[P.pos.y,P.pos.y+PH]:[P.pos.y-PH,P.pos.y]}
+function hits(b){const[y0,y1]=bodyY();return P.pos.x+PR>b.x0&&P.pos.x-PR<b.x1&&P.pos.z+PR>b.z0&&P.pos.z-PR<b.z1&&y0+.02<b.y1&&y1-.02>b.y0&&!(b.ill&&P.dash)}
+function near4(){return query(P.pos.x-1.5,P.pos.z-1.5,P.pos.x+1.5,P.pos.z+1.5).slice()}
+function moveAxis(ax,d){if(!d)return;P.pos[ax]+=d;for(const b of near4()){if(!hits(b))continue;
+    if(P.up>0&&P.ground&&b.y1-P.pos.y<=.6&&b.y1>P.pos.y){const oy=P.pos.y;P.pos.y=b.y1;if(!near4().some(hits))continue;P.pos.y=oy}
+    P.pos[ax]=d>0?b[ax+'0']-PR-.001:b[ax+'1']+PR+.001;P.vel[ax]=0}}
+function moveY(d){P.pos.y+=d;P.ground=false;for(const b of near4()){if(!hits(b))continue;
+    if(P.vel.y*P.up<=0){P.pos.y=P.up>0?b.y1:b.y0;P.ground=true}else P.pos.y=P.up>0?b.y0-PH-.001:b.y1+PH+.001;P.vel.y=0}
+  if(P.up>0&&P.pos.y<0){P.pos.y=0;P.vel.y=0;P.ground=true}if(P.pos.y<-30||P.pos.y>400){P.pos.set(0,0,0);P.vel.set(0,0,0)}}
+function physics(dt){const fu=S.flip&&inFlip(P.pos)?-1:1;if(fu!==P.up){P.up=fu;P.ground=false}
+  const f=(K.KeyW||K.ArrowUp?1:0)-(K.KeyS||K.ArrowDown?1:0),s=((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))*P.up;
+  const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);let wx=fx*f+rx*s,wz=fz*f+rz*s;const wl=Math.hypot(wx,wz);if(wl>0){wx/=wl;wz/=wl}
+  const sh=K.ShiftLeft||K.ShiftRight;P.dash=sh&&wl>0&&f>=0;const sp=P.dash?13.5:5.2,ac=P.ground?14:3.5;
+  P.vel.x=damp(P.vel.x,wx*sp,ac,dt);P.vel.z=damp(P.vel.z,wz*sp,ac,dt);
+  let vent=null;for(const v of VENTS)if(S.vents[v.id]&&Math.hypot(P.pos.x-v.x,P.pos.z-v.z)<v.r+.2&&P.pos.y>v.y-.6&&P.pos.y<v.top+1.5){vent=v;break}
+  P.vent=vent;
+  if(vent&&P.up>0){if(K.Space)P.vel.y=damp(P.vel.y,P.pos.y<vent.top?10:-.5,P.pos.y<vent.top?2.5:4,dt);else P.vel.y=Math.max(P.vel.y-6*dt,-2.2);if(K.Space&&!P.jumpHeld)AU.lift()}
+  else{const g=22*P.up;P.vel.y-=g*dt*(K.Space&&P.vel.y*P.up>0?.5:1);P.vel.y=clamp(P.vel.y,-40,40);
+    if(K.Space&&!P.jumpHeld&&P.ground){P.vel.y=7.2*P.up;P.ground=false;AU.jump()}}
+  P.jumpHeld=!!K.Space;
+  const n=Math.ceil(Math.max(Math.abs(P.vel.x),Math.abs(P.vel.z),Math.abs(P.vel.y))*dt/.25)||1,h=dt/n;
+  for(let k=0;k<n;k++){moveAxis('x',P.vel.x*h);moveAxis('z',P.vel.z*h);moveY(P.vel.y*h)}
+  const hs=Math.hypot(P.vel.x,P.vel.z);P.R.spd=hs;
+  P.inside=RAINR.some(r=>P.pos.x>r[0]&&P.pos.x<r[2]&&P.pos.z>r[1]&&P.pos.z<r[3]&&P.pos.y<r[4]);
+  if(P.ground&&hs>.5){P.step+=hs*dt;if(P.step>(P.dash?3:2.1)){P.step=0;AU.step(P.inside,P.dash)}}
+  if(hs>.3){const fy=Math.atan2(-P.vel.x,-P.vel.z);let d=fy-P.face;d=Math.atan2(Math.sin(d),Math.cos(d));P.face+=d*Math.min(1,dt*10)}
+  if(P.fp)P.face=P.yaw}
+const _cp=V3(),_cd=V3(),_hd=V3();
+function camUpdate(dt){P.roll=damp(P.roll,P.up<0?Math.PI:0,5,dt);const R=P.R;R.root.position.copy(P.pos);R.root.rotation.set(0,P.face,P.roll);
+  R.headMeshes.forEach(m=>m.visible=!P.fp);
+  _hd.set(P.pos.x,P.pos.y+1.62*P.up,P.pos.z);const cp=Math.cos(P.pitch),fx=-Math.sin(P.yaw)*cp,fy=Math.sin(P.pitch)*P.up,fz=-Math.cos(P.yaw)*cp;
+  P.dist=damp(P.dist,P.fp?0:4.6,8,dt);
+  if(P.dist<.3){_cp.set(_hd.x+fx*.12,_hd.y+fy*.12,_hd.z+fz*.12);camera.position.copy(_cp)}
+  else{const rx=Math.cos(P.yaw)*P.up,rz=-Math.sin(P.yaw)*P.up;const pv=_cd.set(_hd.x+rx*.55,_hd.y+.15*P.up,_hd.z+rz*.55);let d=P.dist;
+    for(let t=.3;t<P.dist;t+=.25)if(pointSolid(pv.x-fx*t,pv.y-fy*t,pv.z-fz*t)){d=Math.max(.3,t-.35);break}
+    _cp.set(pv.x-fx*d,pv.y-fy*d,pv.z-fz*d);camera.position.lerp(_cp,1-Math.exp(-14*dt));if(camera.position.distanceTo(_cp)>6)camera.position.copy(_cp)}
+  camera.rotation.set(P.pitch*P.up,P.yaw,P.roll,'YXZ');P.fov=damp(P.fov,P.dash?84:70,5,dt);if(Math.abs(camera.fov-P.fov)>.05){camera.fov=P.fov;camera.updateProjectionMatrix()}
+  P.chest.set(P.pos.x,P.pos.y+1.15*P.up,P.pos.z)}
+// interaction focus: a small floating octahedron marks what [E] will touch (no text)
+const MARK=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.OctahedronGeometry(.16)),new THREE.LineBasicMaterial({color:PAL.cyan,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthTest:false}));
+MARK.renderOrder=9;scene.add(MARK);let FOCUS=null,markA=0;
+function focusUpdate(dt){let best=null,bd=1e9;const vx=-Math.sin(P.yaw),vz=-Math.cos(P.yaw);
+  for(const o of INTS){const d=o.p.distanceTo(P.chest);if(d<o.r&&d<bd){const fx=o.p.x-P.chest.x,fz=o.p.z-P.chest.z,fl=Math.hypot(fx,fz)||1;if(d>1.3&&(fx*vx+fz*vz)/fl<-.2)continue;best=o;bd=d}}
+  FOCUS=best;markA=damp(markA,best?1:0,8,dt);MARK.visible=markA>.02;if(best){MARK.position.lerp(_v.copy(best.p).setY(best.p.y+.55+Math.sin(U.time.value*3)*.06),.3)}
+  MARK.rotation.y+=dt*2;MARK.material.opacity=markA*.9;MARK.scale.setScalar(1+Math.max(0,markA-1))}
+function interact(){if(!FOCUS||S.won)return;FOCUS.fn();MARK.scale.setScalar(2.2)}
