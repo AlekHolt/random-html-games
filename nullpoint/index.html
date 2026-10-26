@@ -380,7 +380,7 @@ const CORE_VS=`uniform float uTime,uInt;varying vec3 vN,vV,vP;void main(){vec3 p
 vP=position;vN=normalize(normalMatrix*normal);vec4 mv=modelViewMatrix*vec4(p,1.);vV=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}`;
 const CORE_FS=`uniform float uTime,uInt,uOver;uniform vec3 uCol;varying vec3 vN,vV,vP;${GLN}
 void main(){float f=1.-abs(dot(normalize(vN),vV));float pl=fbm(vP.xy*2.5+vec2(uTime*.6,-uTime*.4))*fbm(vP.yz*3.-uTime*.5);
-vec3 c=mix(uCol,vec3(1.,.27,.06),uOver);vec3 col=c*(.35+1.4*pow(f,2.))*uInt*.6+c*pl*1.8*uInt*.5+vec3(1.)*pow(1.-f,4.)*.25*uInt;
+vec3 c=mix(uCol,vec3(1.,.27,.06),uOver);vec3 col=c*(.25+1.2*pow(f,2.))*uInt*.45+c*pl*1.4*uInt*.4+vec3(1.)*pow(1.-f,4.)*.12*uInt;
 gl_FragColor=vec4(col,1.);
 #include <tonemapping_fragment>
 }`;
@@ -400,7 +400,7 @@ function core(cx,x,y,z,id){const g=new THREE.Group();g.position.set(x,y,z);cx.ad
   const st={t:S.cores[id]?1:0,on:!!S.cores[id]},wp=V3(x,y+2,z);
   cx.up(dt=>{const T=U.time.value;if(st.on)st.t=Math.min(1,st.t+dt/2.4);const k=st.t*st.t*(3-2*st.t),sp2=st.on?(1-k)*9+1.2:.35;
     shells.forEach((s,i)=>{s.rotation.y+=dt*sp2;s.children[0].position.set(-Math.cos(.45)*k*1.6,0,Math.sin(.45)*k*1.6);s.children[0].rotation.z=k*.5});
-    sph.scale.setScalar(1+k*2+Math.sin(T*3)*.04);lat.scale.setScalar(1+k*2.4);lat.rotation.y+=dt*(.4+k);lat.rotation.x+=dt*.25;cm.uniforms.uInt.value=1.4+k*4.5+Math.sin(T*5)*.15*(1+k);
+    sph.scale.setScalar(1+k*2+Math.sin(T*3)*.04);lat.scale.setScalar(1+k*2.4);lat.rotation.y+=dt*(.4+k);lat.rotation.x+=dt*.25;cm.uniforms.uInt.value=1.2+k*2.2+Math.sin(T*5)*.15*(1+k);
     tor1.rotation.set(T*.7*(1+k*6),T*.3,0);tor2.rotation.set(0,T*.5,T*.9*(1+k*6));tor1.scale.setScalar(1+k*.9);tor2.scale.setScalar(1+k*1.2);
     hub.position.y=2.6+Math.sin(T*1.3)*.12+k*.8;sp.scale.setScalar(5+k*9);sp.material.opacity=.5+k*.4;ln.mul=1+k*2.5});
   cx.int({p:wp,r:3.6,fn:()=>{if(st.on)return;st.on=true;S.cores[id]=1;AU.coreOn(id);coreActivated(id)}})}
@@ -849,10 +849,11 @@ function moveAxis(ax,d){if(!d)return;P.pos[ax]+=d;for(const b of near4()){if(!hi
     if(P.up>0&&P.ground&&b.y1-P.pos.y<=.6&&b.y1>P.pos.y){const oy=P.pos.y;P.pos.y=b.y1;if(!near4().some(hits))continue;P.pos.y=oy}
     P.pos[ax]=d>0?b[ax+'0']-PR-.001:b[ax+'1']+PR+.001;P.vel[ax]=0}}
 function hitsY(b){const[y0,y1]=bodyY();return P.pos.x+PR>b.x0&&P.pos.x-PR<b.x1&&P.pos.z+PR>b.z0&&P.pos.z-PR<b.z1&&y0<b.y1&&y1>b.y0&&!(b.ill&&P.dash)}
-function moveY(d){P.pos.y+=d;P.ground=false;for(const b of near4()){if(!hitsY(b))continue;
+function moveY(d){P.pos.y+=d;P.ground=false;for(const b of near4()){if(!hitsY(b))continue;const[y0,y1]=bodyY();
+    if(P.up>0?b.y1-y0<.35:y1-b.y0<.35){P.pos.y=P.up>0?b.y1:b.y0;P.ground=true;if(P.vel.y*P.up<0)P.vel.y=0;continue}
     if(P.vel.y*P.up<=0){P.pos.y=P.up>0?b.y1:b.y0;P.ground=true}else P.pos.y=P.up>0?b.y0-PH-.001:b.y1+PH+.001;P.vel.y=0}
   if(P.up>0&&P.pos.y<0){P.pos.y=0;P.vel.y=0;P.ground=true}if(P.pos.y<-30||P.pos.y>400){P.pos.set(0,0,0);P.vel.set(0,0,0)}}
-function physics(dt){const fu=S.flip&&inFlip(P.pos)?-1:1;if(fu!==P.up){P.up=fu;P.ground=false}
+function physics(dt){const fu=S.flip&&inFlip(P.pos)?-1:1;if(fu!==P.up){P.pos.y+=PH*(P.up-fu)/2;P.up=fu;P.ground=false;P.vel.y=0}
   const f=(K.KeyW||K.ArrowUp?1:0)-(K.KeyS||K.ArrowDown?1:0),s=((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))*P.up;
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);let wx=fx*f+rx*s,wz=fz*f+rz*s;const wl=Math.hypot(wx,wz);if(wl>0){wx/=wl;wz/=wl}
   const sh=K.ShiftLeft||K.ShiftRight;P.dash=sh&&wl>0&&f>=0;const sp=P.dash?13.5:5.2,ac=P.ground?14:3.5;
